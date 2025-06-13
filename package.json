@@ -1,0 +1,46 @@
+{
+  "name": "@lassejlv/postgres-http-driver",
+  "version": "0.1.0",
+  "description": "Driver for Postgres HTTP Server (docker.com/lassejlv/postgres_http)",
+  "repository": "lassejlv/postgres_http",
+  "license": "MIT",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "unbuild",
+    "dev": "vitest dev",
+    "lint": "eslint . && prettier -c .",
+    "lint:fix": "automd && eslint . --fix && prettier -w .",
+    "prepack": "pnpm build",
+    "release": "pnpm test && changelogen --release && npm publish && git push --follow-tags",
+    "test": "pnpm lint && pnpm test:types && vitest run --coverage",
+    "test:types": "tsc --noEmit --skipLibCheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.13",
+    "@vitest/coverage-v8": "^3.0.9",
+    "automd": "^0.4.0",
+    "changelogen": "^0.6.1",
+    "eslint": "^9.23.0",
+    "eslint-config-unjs": "^0.4.2",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
+    "unbuild": "^3.5.0",
+    "vitest": "^3.0.9"
+  },
+  "packageManager": "pnpm@10.12.1",
+  "dependencies": {
+    "@types/pg": "^8.15.4",
+    "ky": "^1.8.1",
+    "pg": "^8.16.0"
+  }
+}
