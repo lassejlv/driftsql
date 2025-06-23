@@ -137,6 +137,7 @@ export class DriftSQLClient<DT> {
         throw error
       }
     }
+
     // Try libsql client
     if (this.libsqlClient) {
       try {
@@ -151,22 +152,6 @@ export class DriftSQLClient<DT> {
       }
     }
 
-    if (this.neonClient) {
-      try {
-        const sql = this.neonClient
-        console.log(sql)
-
-        throw new Error('Neon client is not implemented yet')
-
-        return {
-          rows: [] as T[],
-          rowCount: 0,
-        }
-      } catch (error) {
-        consola.error('Failed to execute query with Neon:', error)
-        throw error
-      }
-    }
     // Fallback to HTTP
     try {
       const response = await this.client.post('query', {
@@ -209,8 +194,15 @@ export class DriftSQLClient<DT> {
     return result.rows[0] || null
   }
 
-  async findMany<K extends keyof DT>(table: K, where?: Partial<DT[K]>): Promise<DT[K][]> {
+  async findMany<K extends keyof DT>(
+    table: K,
+    options?: {
+      where?: Partial<DT[K]>
+      limit?: number
+    },
+  ): Promise<DT[K][]> {
     const tableName = String(table)
+    const { where, limit } = options || {}
     const whereEntries = Object.entries(where || {})
 
     let query = `SELECT * FROM ${tableName}`
@@ -220,6 +212,11 @@ export class DriftSQLClient<DT> {
       const whereClause = whereEntries.map(([key], index) => `${key} = $${index + 1}`).join(' AND ')
       query += ` WHERE ${whereClause}`
       args = whereEntries.map(([, value]) => value as string | number | boolean | null)
+    }
+
+    if (typeof limit === 'number' && limit > 0) {
+      query += ` LIMIT $${args.length + 1}`
+      args.push(limit)
     }
 
     const result = await this.query<DT[K] & Record<string, any>>(query, args)
