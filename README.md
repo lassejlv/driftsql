@@ -153,8 +153,6 @@ console.log(`Database OK: ${status.ok}, Ping: ${status.ping}ms`)
 await db.close()
 ```
 
-## API Reference
-
 ### Constructor Options
 
 ```typescript
@@ -175,62 +173,15 @@ interface ClientOptions {
 }
 ```
 
-### Methods
-
-- `query<T>(sql: string, args?: (string | number | boolean | null)[])` - Execute raw SQL with parameters
-- `findFirst<K>(table: K, where?: Partial<DT[K]>)` - Find first matching record
-- `findMany<K>(table: K, where?: Partial<DT[K]>)` - Find all matching records
-- `insert<K>(table: K, data: Partial<DT[K]>)` - Insert new record
-- `update<K>(table: K, data: Partial<DT[K]>, where: Partial<DT[K]>)` - Update records
-- `delete<K>(table: K, where: Partial<DT[K]>)` - Delete records
-- `deleteFirst<K>(table: K, where: Partial<DT[K]>)` - Delete first matching record
-- `status()` - Get server status and ping (HTTP driver only)
-- `close()` - Close database connections
-
-### Return Types
-
-All query methods return a unified result format:
-
-```typescript
-type UnifiedQueryResult<T> = {
-  rows: T[]
-  rowCount: number
-  command?: string
-  fields?: Array<{ name: string; dataTypeID: number }>
-}
-```
-
-## Development
-
-<details>
-
-<summary>local development</summary>
-
-- Clone this repository
-- Install latest LTS version of [Node.js](https://nodejs.org/en/)
-- Enable [Corepack](https://github.com/nodejs/corepack) using `corepack enable`
-- Install dependencies using `pnpm install`
-- Run interactive tests using `pnpm dev`
-
 </details>
 
 ## License
 
 <!-- automd:contributors license=MIT -->
 
-Published under the [MIT](https://github.com/lassejlv/postgres-http-js/blob/main/LICENSE) license.
-Made by [community](https://github.com/lassejlv/postgres-http-js/graphs/contributors) 💛
+Published under the [MIT](https://github.com/lassejlv/driftsql/blob/main/LICENSE) license.
+Made by [community](https://github.com/lassejlv/driftsql/graphs/contributors) 💛
 <br><br>
-<a href="https://github.com/lassejlv/postgres-http-js/graphs/contributors">
-<img src="https://contrib.rocks/image?repo=lassejlv/postgres-http-js" />
+<a href="https://github.com/lassejlv/driftsql/graphs/contributors">
+<img src="https://contrib.rocks/image?repo=lassejlv/driftsql" />
 </a>
-
-<!-- /automd -->
-
-<!-- automd:with-automd -->
-
----
-
-_🤖 auto updated with [automd](https://automd.unjs.io)_
-
-<!-- /automd -->
