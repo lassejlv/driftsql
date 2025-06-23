@@ -297,6 +297,14 @@ export class DriftSQLClient<DT> {
     if (this.libsqlClient) {
       this.libsqlClient.close()
     }
+
+    if (this.mysqlClient) {
+      await (await this.mysqlClient).end()
+    }
+
+    if (this.postgresClient) {
+      await this.postgresClient.end()
+    }
   }
 }
 
