@@ -1,21 +1,29 @@
-# @lassejlv/postgres-http-driver
+# DriftSQL
 
 <!-- automd:badges color=yellow -->
 
-[![npm version](https://img.shields.io/npm/v/@lassejlv/postgres-http-driver?color=yellow)](https://npmjs.com/package/@lassejlv/postgres-http-driver)
-[![npm downloads](https://img.shields.io/npm/dm/@lassejlv/postgres-http-driver?color=yellow)](https://npm.chart.dev/@lassejlv/postgres-http-driver)
+[![npm version](https://img.shields.io/npm/v/driftsql?color=yellow)](https://npmjs.com/package/driftsql)
+[![npm downloads](https://img.shields.io/npm/dm/driftsql?color=yellow)](https://npm.chart.dev/driftsql)
 
 <!-- /automd -->
 
-Driver for Postgres HTTP Server (docker.com/lassejlv/postgres_http). This package provides a TypeScript client for connecting to PostgreSQL databases over HTTP, offering a simple and type-safe interface for database operations.
+A lightweight SQL client for TypeScript, supporting multiple databases like PostgreSQL, LibSQL, and HTTP-based database services. DriftSQL provides a unified, type-safe interface for database operations across different database drivers.
 
 ## Features
 
 - 🔐 Type-safe database operations with TypeScript generics
 - 🛡️ SQL injection protection with parameterized queries
-- 🚀 Simple HTTP-based connection (no native PostgreSQL driver required)
+- 🚀 Multiple driver support (PostgreSQL, LibSQL, HTTP)
 - 📝 Auto-completion support for database schema types
 - ⚡ Built-in error handling and connection management
+- 🔄 Unified API across different database types
+
+## Supported Drivers
+
+- **PostgreSQL** - Native PostgreSQL driver via `pg`
+- **LibSQL** - SQLite-compatible databases via `@libsql/client`
+- **HTTP** - HTTP-based database services
+- **Neon** - Neon serverless PostgreSQL (experimental)
 
 ## Usage
 
@@ -23,42 +31,35 @@ Install the package:
 
 ```sh
 # ✨ Auto-detect (supports npm, yarn, pnpm, deno and bun)
-npx nypm install @lassejlv/postgres-http-driver
+npx nypm install driftsql
 ```
 
 Import and use:
 
-<!-- automd:jsimport cdn name="@lassejlv/postgres-http-driver" -->
+<!-- automd:jsimport cdn name="driftsql" -->
 
 **ESM** (Node.js, Bun, Deno)
 
 ```js
-import { PostgresHTTPClient } from "@lassejlv/postgres-http-driver";
+import { DriftSQLClient } from 'driftsql'
 ```
 
 **CDN** (Deno, Bun and Browsers)
 
 ```js
-import { PostgresHTTPClient } from "https://esm.sh/@lassejlv/postgres-http-driver";
+import { DriftSQLClient } from 'https://esm.sh/driftsql'
 ```
 
 <!-- /automd -->
 
 ## Quick Start
 
+### Define Your Database Schema
+
 ```typescript
-import { PostgresHTTPClient } from '@lassejlv/postgres-http-driver'
+import { DriftSQLClient } from 'driftsql'
 
-// Initialize the client
-const db = new PostgresHTTPClient({
-  url: 'https://your-postgres-http-server.com',
-  password: 'your-bearer-token',
-  options: {
-    defaultTimeout: 5000 // optional, defaults to 5000ms
-  }
-})
-
-// Define your table interface for type safety
+// Define your database schema types
 interface User {
   id: number
   name: string
@@ -66,32 +67,97 @@ interface User {
   created_at: string
 }
 
+interface Post {
+  id: number
+  title: string
+  content: string | null
+  user_id: number | null
+  published: boolean
+  created_at: Date
+  updated_at: Date
+}
+
+// Define your database schema
+interface MyDatabase {
+  users: User
+  posts: Post
+}
+```
+
+### Initialize with PostgreSQL
+
+```typescript
+const db = new DriftSQLClient<MyDatabase>({
+  drivers: {
+    postgres: {
+      connectionString: 'postgresql://user:password@localhost:5432/mydb',
+      // or individual options:
+      // host: 'localhost',
+      // port: 5432,
+      // database: 'mydb',
+      // user: 'user',
+      // password: 'password'
+    },
+  },
+})
+```
+
+### Initialize with LibSQL
+
+```typescript
+const db = new DriftSQLClient<MyDatabase>({
+  drivers: {
+    libsql: {
+      url: 'file:local.db',
+      // or for remote:
+      // url: 'libsql://your-database.turso.io',
+      // authToken: 'your-auth-token'
+    },
+  },
+})
+```
+
+### Initialize with HTTP
+
+```typescript
+const db = new DriftSQLClient<MyDatabase>({
+  url: 'https://your-database-api.com',
+  password: 'your-bearer-token',
+  options: {
+    defaultTimeout: 5000, // optional, defaults to 5000ms
+  },
+})
+```
+
+### Database Operations
+
+```typescript
 // Raw SQL queries
-const users = await db.query<User>('SELECT * FROM users WHERE active = $1', ['true'])
+const users = await db.query<User>('SELECT * FROM users WHERE active = $1', [true])
 console.log(users.rows)
 
 // Find operations
-const user = await db.findFirst<User>({ email: 'user@example.com' }, 'users')
-const activeUsers = await db.findMany<User>({ active: true }, 'users')
+const user = await db.findFirst('users', { email: 'user@example.com' })
+const activeUsers = await db.findMany('users', { active: true })
 
 // Insert operations
-const newUser = await db.insert<User>('users', {
+const newUser = await db.insert('users', {
   name: 'John Doe',
-  email: 'john@example.com'
+  email: 'john@example.com',
 })
 
 // Update operations
-const updatedUser = await db.update<User>('users', 
-  { name: 'Jane Doe' }, 
-  { id: 1 }
-)
+const updatedUser = await db.update('users', { name: 'Jane Doe' }, { id: 1 })
 
 // Delete operations
-const deleted = await db.delete<User>('users', { id: 1 })
+const deleted = await db.delete('users', { id: 1 })
 
-// Check server status
+// Check server status (HTTP only)
 const status = await db.status()
 console.log(`Database OK: ${status.ok}, Ping: ${status.ping}ms`)
+
+// Clean up connections
+await db.close()
 ```
 
 ## API Reference
@@ -100,23 +166,46 @@ console.log(`Database OK: ${status.ok}, Ping: ${status.ping}ms`)
 
 ```typescript
 interface ClientOptions {
-  url: string           // HTTP server URL
-  password: string      // Bearer token for authentication
+  url?: string // HTTP server URL (for HTTP driver)
+  password?: string // Bearer token for HTTP authentication
+  drivers?: {
+    libsql?: LibsqlClientConfig // LibSQL configuration
+    postgres?: PoolConfig // PostgreSQL configuration
+    postgresNeonHTTP?: {
+      // Neon configuration (experimental)
+      connectionString: string
+    }
+  }
   options?: {
-    defaultTimeout?: number  // Request timeout in milliseconds
+    defaultTimeout?: number // Request timeout in milliseconds
   }
 }
 ```
 
 ### Methods
 
-- `query<T>(sql: string, args?: string[])` - Execute raw SQL with parameters
-- `findFirst<T>(where: Partial<T>, table: string)` - Find first matching record
-- `findMany<T>(where: Partial<T>, table: string)` - Find all matching records
-- `insert<T>(table: string, data: Partial<T>)` - Insert new record
-- `update<T>(table: string, data: Partial<T>, where: Partial<T>)` - Update records
-- `delete<T>(table: string, where: Partial<T>)` - Delete records
-- `status()` - Get server status and ping
+- `query<T>(sql: string, args?: (string | number | boolean | null)[])` - Execute raw SQL with parameters
+- `findFirst<K>(table: K, where?: Partial<DT[K]>)` - Find first matching record
+- `findMany<K>(table: K, where?: Partial<DT[K]>)` - Find all matching records
+- `insert<K>(table: K, data: Partial<DT[K]>)` - Insert new record
+- `update<K>(table: K, data: Partial<DT[K]>, where: Partial<DT[K]>)` - Update records
+- `delete<K>(table: K, where: Partial<DT[K]>)` - Delete records
+- `deleteFirst<K>(table: K, where: Partial<DT[K]>)` - Delete first matching record
+- `status()` - Get server status and ping (HTTP driver only)
+- `close()` - Close database connections
+
+### Return Types
+
+All query methods return a unified result format:
+
+```typescript
+type UnifiedQueryResult<T> = {
+  rows: T[]
+  rowCount: number
+  command?: string
+  fields?: Array<{ name: string; dataTypeID: number }>
+}
+```
 
 ## Development
 

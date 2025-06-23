@@ -9,6 +9,9 @@ export default unjs({
     'unicorn/prefer-optional-catch-binding': 'off',
     'unicorn/no-null': 'off',
     'unicorn/prefer-native-coercion-functions': 'off',
+    'unicorn/no-empty-files': 'off',
+    'unicorn/no-array-for-each': 'off',
+    'unicorn/explicit-length-check': 'off',
   },
   markdown: {
     rules: {
