@@ -23,7 +23,6 @@ A lightweight SQL client for TypeScript, supporting multiple databases like Post
 - **PostgreSQL** - Native PostgreSQL driver via `pg`
 - **LibSQL** - SQLite-compatible databases via `@libsql/client`
 - **HTTP** - HTTP-based database services
-- **Neon** - Neon serverless PostgreSQL (experimental)
 
 ## Usage
 
@@ -42,12 +41,6 @@ Import and use:
 
 ```js
 import { DriftSQLClient } from 'driftsql'
-```
-
-**CDN** (Deno, Bun and Browsers)
-
-```js
-import { DriftSQLClient } from 'https://esm.sh/driftsql'
 ```
 
 <!-- /automd -->
