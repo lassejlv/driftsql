@@ -5,6 +5,8 @@ import { Pool, type PoolConfig } from 'pg'
 import { createClient, type Config as LibsqlClientConfig, type ResultSet } from '@libsql/client'
 import { neon } from '@neondatabase/serverless'
 import postgres from 'postgres'
+import mysql from 'mysql2/promise'
+import inspectDB from './pull'
 
 // Unified result type that works with both pg and libsql
 type UnifiedQueryResult<T extends Record<string, any>> = {
@@ -20,8 +22,7 @@ export interface ClientOptions {
   drivers?: {
     libsql?: LibsqlClientConfig
     postgres?: PoolConfig
-    postgresFaster?: { connectionString: string }
-    postgresNeonHTTP?: { connectionString: string }
+    mysql?: mysql.ConnectionOptions
   }
   options?: {
     defaultTimeout?: number
@@ -31,9 +32,11 @@ export interface ClientOptions {
 export class DriftSQLClient<DT> {
   private client: typeof ky
   private pool?: Pool
+  private mysqlClient?: ReturnType<typeof mysql.createConnection>
   private libsqlClient?: ReturnType<typeof createClient>
   private neonClient?: ReturnType<typeof neon>
   private postgresClient?: ReturnType<typeof postgres>
+  private drivers: Record<string, any>
 
   constructor(options: ClientOptions) {
     this.client = ky.create({
@@ -57,8 +60,8 @@ export class DriftSQLClient<DT> {
 
     this.pool = options.drivers?.postgres ? new Pool(options.drivers.postgres) : undefined
     this.libsqlClient = options.drivers?.libsql ? createClient(options.drivers.libsql) : undefined
-    this.neonClient = options.drivers?.postgresNeonHTTP ? neon(options.drivers.postgresNeonHTTP.connectionString) : undefined
-    this.postgresClient = options.drivers?.postgresFaster ? postgres(options.drivers.postgresFaster.connectionString) : undefined
+    this.mysqlClient = options.drivers?.mysql ? mysql.createConnection(options.drivers.mysql) : undefined
+    this.drivers = options.drivers || {}
   }
 
   private convertLibsqlResult<T extends Record<string, any>>(result: ResultSet): UnifiedQueryResult<T> {
@@ -78,6 +81,10 @@ export class DriftSQLClient<DT> {
     }
   }
 
+  readonly inspect = async (): Promise<void> => {
+    return inspectDB(this.drivers)
+  }
+
   async query<T extends Record<string, any>>(query: string, args?: (string | number | boolean | null)[]): Promise<UnifiedQueryResult<T>> {
     // Try PostgreSQL pool first
     if (this.pool) {
@@ -92,6 +99,23 @@ export class DriftSQLClient<DT> {
         }
       } catch (error) {
         consola.error('Failed to connect to PostgreSQL pool:', error)
+      }
+    }
+
+    // Try MySQL client
+    if (this.mysqlClient) {
+      try {
+        consola.warn('MySQL client is experimental and may not be compatible with the helper functions, since they originally designed for PostgreSQL and libsql. But .query() method should work.')
+        const [rows, fields] = await (await this.mysqlClient).execute(query, args || [])
+        return {
+          rows: rows as T[],
+          rowCount: Array.isArray(rows) ? rows.length : 0,
+          command: undefined, // MySQL does not return command info
+          fields: fields.map((field: any) => ({ name: field.name, dataTypeID: field.columnType })),
+        }
+      } catch (error) {
+        consola.error('Failed to execute query with MySQL:', error)
+        throw error
       }
     }
 
@@ -275,3 +299,5 @@ export class DriftSQLClient<DT> {
     }
   }
 }
+
+export { inspectDB } from './pull'

@@ -12,6 +12,7 @@ export default unjs({
     'unicorn/no-empty-files': 'off',
     'unicorn/no-array-for-each': 'off',
     'unicorn/explicit-length-check': 'off',
+    'unicorn/no-process-exit': 'off',
   },
   markdown: {
     rules: {
