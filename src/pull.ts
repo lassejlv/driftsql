@@ -3,12 +3,14 @@ import fs from 'node:fs/promises'
 
 type Drivers = ClientOptions['drivers']
 
-const supportedDrivers = ['postgres'] as const
+const supportedDrivers = ['postgres', 'mysql'] as const
 
-const mapPostgresToTypeScript = (postgresType: string, isNullable: boolean = false): string => {
+const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = false, driverType: string = 'postgres'): string => {
   const nullable = isNullable ? ' | null' : ''
+  const lowerType = dataType.toLowerCase()
 
-  switch (postgresType.toLowerCase()) {
+  // Common types that work for both PostgreSQL and MySQL
+  switch (lowerType) {
     case 'uuid': {
       return `string${nullable}`
     }
@@ -16,7 +18,10 @@ const mapPostgresToTypeScript = (postgresType: string, isNullable: boolean = fal
     case 'varchar':
     case 'text':
     case 'char':
-    case 'character': {
+    case 'character':
+    case 'longtext':
+    case 'mediumtext':
+    case 'tinytext': {
       return `string${nullable}`
     }
     case 'integer':
@@ -33,11 +38,16 @@ const mapPostgresToTypeScript = (postgresType: string, isNullable: boolean = fal
     case 'real':
     case 'float4':
     case 'double precision':
-    case 'float8': {
+    case 'float8':
+    case 'tinyint':
+    case 'mediumint':
+    case 'float':
+    case 'double': {
       return `number${nullable}`
     }
     case 'boolean':
-    case 'bool': {
+    case 'bool':
+    case 'bit': {
       return `boolean${nullable}`
     }
     case 'timestamp':
@@ -49,7 +59,9 @@ const mapPostgresToTypeScript = (postgresType: string, isNullable: boolean = fal
     case 'time with time zone':
     case 'time without time zone':
     case 'timetz':
-    case 'interval': {
+    case 'interval':
+    case 'datetime':
+    case 'year': {
       return `Date${nullable}`
     }
     case 'json':
@@ -59,11 +71,21 @@ const mapPostgresToTypeScript = (postgresType: string, isNullable: boolean = fal
     case 'array': {
       return `any[]${nullable}`
     }
-    case 'bytea': {
+    case 'bytea':
+    case 'binary':
+    case 'varbinary':
+    case 'blob':
+    case 'longblob':
+    case 'mediumblob':
+    case 'tinyblob': {
       return `Buffer${nullable}`
     }
+    case 'enum':
+    case 'set': {
+      return `string${nullable}` // MySQL specific
+    }
     default: {
-      console.warn(`Unknown PostgreSQL type: ${postgresType}, defaulting to 'any'`)
+      console.warn(`Unknown ${driverType} type: ${dataType}, defaulting to 'any'`)
       return `any${nullable}`
     }
   }
@@ -87,42 +109,87 @@ export const inspectDB = async (drivers: Drivers) => {
 
   console.log(`Found supported drivers: ${supportedConfiguredDrivers.join(', ')}`)
 
+  const activeDriver = supportedConfiguredDrivers[0] // Get the first (and should be only) configured driver
   let generatedTypes = ''
 
   const client = new DriftSQLClient({ drivers })
-  const tables = await client.query<{ table_name: string }>(
-    `SELECT table_name 
-     FROM information_schema.tables 
-     WHERE table_schema = 'public' 
-     AND table_type = 'BASE TABLE'
-     ORDER BY table_name`,
-  )
+
+  // Use different queries based on the driver type
+  let tablesQuery: string
+  let tableSchemaFilter: string | undefined
+
+  if (activeDriver === 'mysql') {
+    // For MySQL, get the current database name first
+    const dbResult = await client.query<{ database: string }>('SELECT DATABASE() as `database`', [])
+    const currentDatabase = dbResult.rows[0]?.database
+
+    if (!currentDatabase) {
+      throw new Error('Could not determine current MySQL database name')
+    }
+
+    console.log(`Using MySQL database: ${currentDatabase}`)
+    tablesQuery = `SELECT TABLE_NAME as table_name
+                   FROM information_schema.tables 
+                   WHERE TABLE_SCHEMA = ? 
+                   AND TABLE_TYPE = 'BASE TABLE'
+                   ORDER BY TABLE_NAME`
+    tableSchemaFilter = currentDatabase
+  } else {
+    // PostgreSQL
+    tablesQuery = `SELECT table_name 
+                   FROM information_schema.tables 
+                   WHERE table_schema = $1 
+                   AND table_type = 'BASE TABLE'
+                   ORDER BY table_name`
+    tableSchemaFilter = 'public'
+  }
+
+  const tables = await client.query<{ table_name: string }>(tablesQuery, tableSchemaFilter ? [tableSchemaFilter] : [])
   console.log('Tables in the database:', tables.rows.map((t) => t.table_name).join(', '))
 
   for (const table of tables.rows) {
     const tableName = table.table_name
     console.log(`Inspecting table: ${tableName}`)
 
-    // Get columns with nullability information
+    // Get columns with nullability information - use different queries for different drivers
+    let columnsQuery: string
+    let queryParams: (string | null)[]
+
+    if (activeDriver === 'mysql') {
+      columnsQuery = `
+        SELECT 
+          COLUMN_NAME as column_name, 
+          DATA_TYPE as data_type, 
+          IS_NULLABLE as is_nullable,
+          COLUMN_DEFAULT as column_default
+        FROM information_schema.columns 
+        WHERE TABLE_NAME = ? 
+        AND TABLE_SCHEMA = ?
+        ORDER BY ORDINAL_POSITION
+      `
+      queryParams = [tableName, tableSchemaFilter!]
+    } else {
+      // PostgreSQL
+      columnsQuery = `
+        SELECT 
+          column_name, 
+          data_type, 
+          is_nullable,
+          column_default
+        FROM information_schema.columns 
+        WHERE table_name = $1 
+        AND table_schema = $2
+        ORDER BY ordinal_position
+      `
+      queryParams = [tableName, tableSchemaFilter!]
+    }
+
     const columns = await client.query<{
       column_name: string
       data_type: string
       is_nullable: string
       column_default: string | null
-    }>(
-      `
-      SELECT 
-        column_name, 
-        data_type, 
-        is_nullable,
-        column_default
-      FROM information_schema.columns 
-      WHERE table_name = $1 
-      AND table_schema = 'public'
-      ORDER BY ordinal_position
-    `,
-      [tableName],
-    )
+    }>(columnsQuery, queryParams)
 
     if (columns.rows.length === 0) {
       console.log(`No columns found for table: ${tableName}`)
@@ -141,7 +208,7 @@ export const inspectDB = async (drivers: Drivers) => {
 
     generatedTypes += `export interface ${tableName.charAt(0).toUpperCase() + tableName.slice(1)} {\n`
     for (const col of uniqueColumns.values()) {
-      const tsType = mapPostgresToTypeScript(col.data_type, col.is_nullable === 'YES')
+      const tsType = mapDatabaseTypeToTypeScript(col.data_type, col.is_nullable === 'YES', activeDriver)
       generatedTypes += `  ${col.column_name}: ${tsType};\n`
     }
     generatedTypes += '}\n\n'

@@ -3,7 +3,6 @@ import ky from 'ky'
 
 import { Pool, type PoolConfig } from 'pg'
 import { createClient, type Config as LibsqlClientConfig, type ResultSet } from '@libsql/client'
-import { neon } from '@neondatabase/serverless'
 import postgres from 'postgres'
 import mysql from 'mysql2/promise'
 import inspectDB from './pull'
@@ -34,7 +33,6 @@ export class DriftSQLClient<DT> {
   private pool?: Pool
   private mysqlClient?: ReturnType<typeof mysql.createConnection>
   private libsqlClient?: ReturnType<typeof createClient>
-  private neonClient?: ReturnType<typeof neon>
   private postgresClient?: ReturnType<typeof postgres>
   private drivers: Record<string, any>
 
@@ -86,6 +84,14 @@ export class DriftSQLClient<DT> {
   }
 
   async query<T extends Record<string, any>>(query: string, args?: (string | number | boolean | null)[]): Promise<UnifiedQueryResult<T>> {
+    // check if more than one driver is configured
+    const driversCount = Object.keys(this.drivers).filter((key) => this.drivers[key as keyof typeof this.drivers] !== undefined).length
+    if (driversCount > 1) {
+      const error = new Error('Multiple drivers are configured. Please use only one driver at a time.')
+      consola.error(error)
+      throw error
+    }
+
     // Try PostgreSQL pool first
     if (this.pool) {
       try {
@@ -106,7 +112,11 @@ export class DriftSQLClient<DT> {
     if (this.mysqlClient) {
       try {
         consola.warn('MySQL client is experimental and may not be compatible with the helper functions, since they originally designed for PostgreSQL and libsql. But .query() method should work.')
-        const [rows, fields] = await (await this.mysqlClient).execute(query, args || [])
+
+        // Filter out undefined values and convert them to null for MySQL
+        const filteredArgs = (args || []).map((arg) => (arg === undefined ? null : arg))
+
+        const [rows, fields] = await (await this.mysqlClient).execute(query, filteredArgs)
         return {
           rows: rows as T[],
           rowCount: Array.isArray(rows) ? rows.length : 0,
