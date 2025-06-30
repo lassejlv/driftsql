@@ -1,6 +1,6 @@
 {
   "name": "driftsql",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "author": "lasse vestergaard",
   "description": "A lightweight SQL client for TypeScript, supporting multiple databases like PostgreSQL, MySQL, and LibSQL.",
   "repository": "lassejlv/driftsql",
@@ -27,16 +27,16 @@
     "test:types": "tsc --noEmit --skipLibCheck"
   },
   "devDependencies": {
-    "@types/node": "^22.13.13",
-    "@vitest/coverage-v8": "^3.0.9",
+    "@types/node": "^22.15.34",
+    "@vitest/coverage-v8": "^3.2.4",
     "automd": "^0.4.0",
     "changelogen": "^0.6.1",
-    "eslint": "^9.23.0",
+    "eslint": "^9.30.0",
     "eslint-config-unjs": "^0.4.2",
-    "prettier": "^3.5.3",
-    "typescript": "^5.8.2",
+    "prettier": "^3.6.2",
+    "typescript": "^5.8.3",
     "unbuild": "^3.5.0",
-    "vitest": "^3.0.9"
+    "vitest": "^3.2.4"
   },
   "packageManager": "pnpm@10.12.1",
   "dependencies": {
@@ -48,7 +48,7 @@
     "drizzle-orm": "^0.44.2",
     "ky": "^1.8.1",
     "mysql2": "^3.14.1",
-    "pg": "^8.16.0",
+    "pg": "^8.16.3",
     "postgres": "^3.4.7"
   }
 }

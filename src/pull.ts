@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 
 type Drivers = ClientOptions['drivers']
 
-const supportedDrivers = ['postgres', 'mysql'] as const
+const supportedDrivers = ['postgres', 'mysql', 'libsql'] as const
 
 const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = false, driverType: string = 'postgres'): string => {
   const nullable = isNullable ? ' | null' : ''
@@ -134,7 +134,7 @@ export const inspectDB = async (drivers: Drivers) => {
                    AND TABLE_TYPE = 'BASE TABLE'
                    ORDER BY TABLE_NAME`
     tableSchemaFilter = currentDatabase
-  } else {
+  } else if (activeDriver === 'postgres') {
     // PostgreSQL
     tablesQuery = `SELECT table_name 
                    FROM information_schema.tables 
@@ -142,6 +142,13 @@ export const inspectDB = async (drivers: Drivers) => {
                    AND table_type = 'BASE TABLE'
                    ORDER BY table_name`
     tableSchemaFilter = 'public'
+  } else {
+    // LibSQL (SQLite)
+    tablesQuery = `SELECT name as table_name 
+                   FROM sqlite_master 
+                   WHERE type = 'table' 
+                   ORDER BY name`
+    tableSchemaFilter = undefined // LibSQL does not have schemas like PostgreSQL or MySQL
   }
 
   const tables = await client.query<{ table_name: string }>(tablesQuery, tableSchemaFilter ? [tableSchemaFilter] : [])
@@ -168,7 +175,7 @@ export const inspectDB = async (drivers: Drivers) => {
         ORDER BY ORDINAL_POSITION
       `
       queryParams = [tableName, tableSchemaFilter!]
-    } else {
+    } else if (activeDriver === 'postgres') {
       // PostgreSQL
       columnsQuery = `
         SELECT 
@@ -182,6 +189,18 @@ export const inspectDB = async (drivers: Drivers) => {
         ORDER BY ordinal_position
       `
       queryParams = [tableName, tableSchemaFilter!]
+    } else {
+      // LibSQL (SQLite)
+      columnsQuery = `
+        SELECT 
+          name as column_name, 
+          type as data_type, 
+          CASE WHEN "notnull" = 0 THEN 'YES' ELSE 'NO' END as is_nullable,
+          dflt_value as column_default
+        FROM pragma_table_info(?)
+        ORDER BY cid
+      `
+      queryParams = [tableName]
     }
 
     const columns = await client.query<{

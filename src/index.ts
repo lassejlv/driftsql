@@ -1,10 +1,10 @@
 import consola from 'consola'
 import ky from 'ky'
 
-import { Pool, type PoolConfig } from 'pg'
-import { createClient, type Config as LibsqlClientConfig, type ResultSet } from '@libsql/client'
+import { Pool, type PoolConfig as PostgresConfig } from 'pg'
+import { createClient, type Config as LibSQLConfig, type ResultSet } from '@libsql/client'
 import postgres from 'postgres'
-import mysql from 'mysql2/promise'
+import mysql, { type ConnectionOptions as MySQLConfig } from 'mysql2/promise'
 import inspectDB from './pull'
 
 // Unified result type that works with both pg and libsql
@@ -19,9 +19,9 @@ export interface ClientOptions {
   url?: string
   password?: string
   drivers?: {
-    libsql?: LibsqlClientConfig
-    postgres?: PoolConfig
-    mysql?: mysql.ConnectionOptions
+    libsql?: LibSQLConfig
+    postgres?: PostgresConfig
+    mysql?: MySQLConfig
   }
   options?: {
     defaultTimeout?: number
