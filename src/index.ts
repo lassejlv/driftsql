@@ -16,11 +16,21 @@ type UnifiedQueryResult<T extends Record<string, any>> = {
 }
 
 export interface ClientOptions {
+  /**
+   * @deprecated Since version 1.0.8 this option is deprecated and will be removed in future versions. Use `drivers.postgresHTTP.url` instead.
+   */
   url?: string
+  /**
+   * @deprecated Since version 1.0.8 this option is deprecated and will be removed in future versions. Use `drivers.postgresHTTP.url` instead.
+   */
   password?: string
   drivers?: {
     libsql?: LibSQLConfig
     postgres?: PostgresConfig
+    postgresHTTP?: {
+      url: string
+      password: string
+    }
     mysql?: MySQLConfig
   }
   options?: {
@@ -38,9 +48,9 @@ export class DriftSQLClient<DT> {
 
   constructor(options: ClientOptions) {
     this.client = ky.create({
-      prefixUrl: options.url,
+      prefixUrl: options.drivers?.postgresHTTP!.url || options.url || 'http://localhost:3000',
       headers: {
-        Authorization: `Bearer ${options.password}`,
+        Authorization: `Bearer ${options.drivers?.postgresHTTP?.password || options.password || ''}`,
       },
       timeout: options.options?.defaultTimeout || 5000,
       hooks: {

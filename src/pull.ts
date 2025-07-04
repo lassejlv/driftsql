@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 
 type Drivers = ClientOptions['drivers']
 
-const supportedDrivers = ['postgres', 'mysql', 'libsql'] as const
+const supportedDrivers = ['postgres', 'postgresHTTP', 'mysql', 'libsql'] as const
 
 const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = false, driverType: string = 'postgres'): string => {
   const nullable = isNullable ? ' | null' : ''
@@ -134,7 +134,7 @@ export const inspectDB = async (drivers: Drivers) => {
                    AND TABLE_TYPE = 'BASE TABLE'
                    ORDER BY TABLE_NAME`
     tableSchemaFilter = currentDatabase
-  } else if (activeDriver === 'postgres') {
+  } else if (activeDriver === 'postgres' || activeDriver === 'postgresHTTP') {
     // PostgreSQL
     tablesQuery = `SELECT table_name 
                    FROM information_schema.tables 
@@ -175,7 +175,7 @@ export const inspectDB = async (drivers: Drivers) => {
         ORDER BY ORDINAL_POSITION
       `
       queryParams = [tableName, tableSchemaFilter!]
-    } else if (activeDriver === 'postgres') {
+    } else if (activeDriver === 'postgres' || activeDriver === 'postgresHTTP') {
       // PostgreSQL
       columnsQuery = `
         SELECT 
