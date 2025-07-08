@@ -1,14 +1,13 @@
 import consola from 'consola'
-import ky from 'ky'
 
-import { Pool, type PoolConfig as PostgresConfig } from 'pg'
-import { createClient, type Config as LibSQLConfig, type ResultSet } from '@libsql/client'
-import postgres from 'postgres'
-import mysql, { type ConnectionOptions as MySQLConfig } from 'mysql2/promise'
 import inspectDB from './pull'
 
+import { PostgresDriver, type PostgresConfig } from './drivers/postgres'
+import { type LibSQLConfig, LibSQLDriver } from './drivers/libsql'
+import { type MySQLConfig, MySQLDriver } from './drivers/mysql'
+
 // Unified result type that works with both pg and libsql
-type UnifiedQueryResult<T extends Record<string, any>> = {
+export type UnifiedQueryResult<T extends Record<string, any>> = {
   rows: T[]
   rowCount: number
   command?: string
@@ -16,77 +15,24 @@ type UnifiedQueryResult<T extends Record<string, any>> = {
 }
 
 export interface ClientOptions {
-  /**
-   * @deprecated Since version 1.0.8 this option is deprecated and will be removed in future versions. Use `drivers.postgresHTTP.url` instead.
-   */
-  url?: string
-  /**
-   * @deprecated Since version 1.0.8 this option is deprecated and will be removed in future versions. Use `drivers.postgresHTTP.url` instead.
-   */
-  password?: string
-  drivers?: {
+  drivers: {
     libsql?: LibSQLConfig
     postgres?: PostgresConfig
-    postgresHTTP?: {
-      url: string
-      password: string
-    }
     mysql?: MySQLConfig
-  }
-  options?: {
-    defaultTimeout?: number
   }
 }
 
 export class DriftSQLClient<DT> {
-  private client: typeof ky
-  private pool?: Pool
-  private mysqlClient?: ReturnType<typeof mysql.createConnection>
-  private libsqlClient?: ReturnType<typeof createClient>
-  private postgresClient?: ReturnType<typeof postgres>
+  private postgres?: PostgresDriver
+  private libsql?: LibSQLDriver
+  private mysql?: MySQLDriver
   private drivers: Record<string, any>
 
   constructor(options: ClientOptions) {
-    this.client = ky.create({
-      prefixUrl: options.drivers?.postgresHTTP!.url || options.url || 'http://localhost:3000',
-      headers: {
-        Authorization: `Bearer ${options.drivers?.postgresHTTP?.password || options.password || ''}`,
-      },
-      timeout: options.options?.defaultTimeout || 5000,
-      hooks: {
-        afterResponse: [
-          async (request, options, response) => {
-            if (!response.ok) {
-              const errorText = await response.text()
-              throw new Error(`HTTP Error: ${response.status} - ${errorText}`)
-            }
-            return response
-          },
-        ],
-      },
-    })
-
-    this.pool = options.drivers?.postgres ? new Pool(options.drivers.postgres) : undefined
-    this.libsqlClient = options.drivers?.libsql ? createClient(options.drivers.libsql) : undefined
-    this.mysqlClient = options.drivers?.mysql ? mysql.createConnection(options.drivers.mysql) : undefined
+    this.postgres = options.drivers?.postgres ? new PostgresDriver({ connectionString: options.drivers.postgres.connectionString! }) : undefined
+    this.libsql = options.drivers?.libsql ? new LibSQLDriver(options.drivers.libsql) : undefined
+    this.mysql = options.drivers?.mysql ? new MySQLDriver(options.drivers.mysql) : undefined
     this.drivers = options.drivers || {}
-  }
-
-  private convertLibsqlResult<T extends Record<string, any>>(result: ResultSet): UnifiedQueryResult<T> {
-    const rows = result.rows.map((row) => {
-      const obj: Record<string, any> = {}
-      result.columns.forEach((col, index) => {
-        obj[col] = row[index]
-      })
-      return obj as T
-    })
-
-    return {
-      rows,
-      rowCount: result.rowsAffected || rows.length,
-      command: undefined,
-      fields: result.columns.map((col) => ({ name: col, dataTypeID: 0 })),
-    }
   }
 
   readonly inspect = async (): Promise<void> => {
@@ -94,44 +40,30 @@ export class DriftSQLClient<DT> {
   }
 
   async query<T extends Record<string, any>>(query: string, args?: (string | number | boolean | null)[]): Promise<UnifiedQueryResult<T>> {
-    // check if more than one driver is configured
-    const driversCount = Object.keys(this.drivers).filter((key) => this.drivers[key as keyof typeof this.drivers] !== undefined).length
-    if (driversCount > 1) {
-      const error = new Error('Multiple drivers are configured. Please use only one driver at a time.')
-      consola.error(error)
-      throw error
-    }
-
-    // Try PostgreSQL pool first
-    if (this.pool) {
+    if (this.postgres) {
       try {
-        await this.pool.connect()
-        const result = await this.pool.query(query, args || [])
+        const result = await this.postgres.query<T>(query, args || [])
         return {
           rows: result.rows,
           rowCount: result.rowCount || 0,
           command: result.command,
-          fields: result.fields,
+          fields: result.fields?.map((field) => ({ name: field.name, dataTypeID: field.dataTypeID })) || [],
         }
       } catch (error) {
-        consola.error('Failed to connect to PostgreSQL pool:', error)
+        consola.error('Failed to execute query with PostgreSQL:', error)
+        throw error
       }
     }
 
     // Try MySQL client
-    if (this.mysqlClient) {
+    if (this.mysql) {
       try {
-        consola.warn('MySQL client is experimental and may not be compatible with the helper functions, since they originally designed for PostgreSQL and libsql. But .query() method should work.')
-
-        // Filter out undefined values and convert them to null for MySQL
-        const filteredArgs = (args || []).map((arg) => (arg === undefined ? null : arg))
-
-        const [rows, fields] = await (await this.mysqlClient).execute(query, filteredArgs)
+        const result = await this.mysql.query<T>(query, args || [])
         return {
-          rows: rows as T[],
-          rowCount: Array.isArray(rows) ? rows.length : 0,
-          command: undefined, // MySQL does not return command info
-          fields: fields.map((field: any) => ({ name: field.name, dataTypeID: field.columnType })),
+          rows: result.rows,
+          rowCount: result.rowCount || 0,
+          command: result.command,
+          fields: result.fields?.map((field) => ({ name: field.name, dataTypeID: field.dataTypeID })) || [],
         }
       } catch (error) {
         consola.error('Failed to execute query with MySQL:', error)
@@ -139,60 +71,25 @@ export class DriftSQLClient<DT> {
       }
     }
 
-    // Try PostgreSQL faster client
-    if (this.postgresClient) {
+    // Try libsql client
+    if (this.libsql) {
       try {
-        const result = await this.postgresClient.unsafe(query, args || [])
-        //
-
+        const result = await this.libsql.query<T>(query, args || [])
         return {
-          // @ts-ignore - postgres library returns rows directly
-          rows: result as T[],
-          rowCount: result.length,
-          command: undefined,
-          fields: [], // postgres library does not provide field info
+          rows: result.rows,
+          rowCount: result.rowCount || 0,
+          command: result.command,
+          fields: undefined,
         }
       } catch (error) {
-        consola.error('Failed to execute query with postgres:', error)
+        consola.error('Failed to execute query with LibSQL:', error)
         throw error
       }
     }
 
-    // Try libsql client
-    if (this.libsqlClient) {
-      try {
-        const result = await this.libsqlClient.execute({
-          sql: query,
-          args: args || [],
-        })
-        return this.convertLibsqlResult<T>(result)
-      } catch (error) {
-        consola.error('Failed to execute query with libsql:', error)
-        throw error
-      }
-    }
-
-    // Fallback to HTTP
-    try {
-      const response = await this.client.post('query', {
-        json: { query, args: args || [] },
-      })
-      return response.json()
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error
-      }
-      throw new Error(`Query failed: ${JSON.stringify(error)}`)
-    }
-  }
-
-  async status(): Promise<{ ok: boolean; ping: number }> {
-    // only work with HTTP client
-    if (!this.client) {
-      throw new Error('HTTP client is not configured')
-    }
-    const response = await this.client.get('status')
-    return response.json()
+    const error = new Error('No database driver is configured or all drivers failed to execute the query')
+    consola.error(error)
+    throw error
   }
 
   async findFirst<K extends keyof DT>(table: K, where?: Partial<DT[K]>): Promise<DT[K] | null> {
@@ -222,6 +119,7 @@ export class DriftSQLClient<DT> {
     },
   ): Promise<DT[K][]> {
     const tableName = String(table)
+
     const { where, limit } = options || {}
     const whereEntries = Object.entries(where || {})
 
@@ -308,19 +206,16 @@ export class DriftSQLClient<DT> {
   }
 
   async close(): Promise<void> {
-    if (this.pool) {
-      await this.pool.end()
-    }
-    if (this.libsqlClient) {
-      this.libsqlClient.close()
+    if (this.postgres) {
+      await this.postgres.close()
     }
 
-    if (this.mysqlClient) {
-      await (await this.mysqlClient).end()
+    if (this.libsql) {
+      this.libsql.close()
     }
 
-    if (this.postgresClient) {
-      await this.postgresClient.end()
+    if (this.mysql) {
+      await this.mysql.close()
     }
   }
 }
