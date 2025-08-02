@@ -14,6 +14,9 @@ importers:
       '@neondatabase/serverless':
         specifier: ^1.0.1
         version: 1.0.1
+      '@tursodatabase/serverless':
+        specifier: ^0.1.2
+        version: 0.1.2
       '@types/pg':
         specifier: ^8.15.4
         version: 8.15.4
@@ -759,6 +762,9 @@ packages:
   '@trysound/sax@0.2.0':
     resolution: {integrity: sha512-L7z9BgrNEcYyUYtF+HaEfiS5ebkh9jXqbszz7pC0hRBPaatV0XjSD3+eHrpqFemQfgwiFF0QPIarnIihIDn7OA==}
     engines: {node: '>=10.13.0'}
+
+  '@tursodatabase/serverless@0.1.2':
+    resolution: {integrity: sha512-paD2xyujPal5p+cvYTLjBVlBvl0TLZN7qQA6P3OksXKHDfsr3GYxZrJoFeHp2hDXOAOTVFFBTNYcwNvg/PNHzg==}
 
   '@types/chai@5.2.2':
     resolution: {integrity: sha512-8kB30R7Hwqf40JPiKhVzodJs2Qc1ZJ5zuT3uzw5Hq/dhNCl3G3l83jfpdI1e20BP348+fV7VIL/+FxaXkqBmWg==}
@@ -3167,6 +3173,8 @@ snapshots:
     optional: true
 
   '@trysound/sax@0.2.0': {}
+
+  '@tursodatabase/serverless@0.1.2': {}
 
   '@types/chai@5.2.2':
     dependencies:

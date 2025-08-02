@@ -1,22 +1,33 @@
 import { createClient, type ResultSet } from '@libsql/client'
 import type { UnifiedQueryResult } from '..'
+import { createClient as tursoServerLessClient, type ResultSet as tursoServerLessResultSet } from '@tursodatabase/serverless/compat'
 
 export interface LibSQLConfig {
   url: string
   authToken?: string
+  options?: {
+    experimental?: {
+      useTursoServerlessDriver?: boolean
+    }
+  }
 }
 
 export class LibSQLDriver {
-  private client: ReturnType<typeof createClient>
+  private client: ReturnType<typeof createClient> | ReturnType<typeof tursoServerLessClient>
 
   constructor(private options: LibSQLConfig) {
-    this.client = createClient({
-      url: this.options.url,
-      ...(this.options.authToken ? { authToken: this.options.authToken } : {}),
-    })
+    this.client = this.options?.options?.experimental?.useTursoServerlessDriver
+      ? tursoServerLessClient({
+          url: this.options.url,
+          ...(this.options.authToken ? { authToken: this.options.authToken } : {}),
+        })
+      : createClient({
+          url: this.options.url,
+          ...(this.options.authToken ? { authToken: this.options.authToken } : {}),
+        })
   }
 
-  private convertLibsqlResult<T extends Record<string, any>>(result: ResultSet): UnifiedQueryResult<T> {
+  private convertLibsqlResult<T extends Record<string, any>>(result: ResultSet | tursoServerLessResultSet): UnifiedQueryResult<T> {
     const rows = result.rows.map((row) => {
       const obj: Record<string, any> = {}
       result.columns.forEach((col, index) => {

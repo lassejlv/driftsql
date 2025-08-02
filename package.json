@@ -1,8 +1,8 @@
 {
   "name": "driftsql",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "author": "lasse vestergaard",
-  "description": "A lightweight SQL client for TypeScript, supporting multiple databases like PostgreSQL, MySQL, and LibSQL.",
+  "description": "A lightweight SQL client for TypeScript",
   "repository": "lassejlv/driftsql",
   "license": "MIT",
   "sideEffects": false,
@@ -42,6 +42,7 @@
   "dependencies": {
     "@libsql/client": "^0.15.9",
     "@neondatabase/serverless": "^1.0.1",
+    "@tursodatabase/serverless": "^0.1.2",
     "@types/pg": "^8.15.4",
     "consola": "^3.4.2",
     "driftsql": "^0.0.1",
