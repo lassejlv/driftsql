@@ -2,7 +2,7 @@ import consola from 'consola'
 
 import inspectDB from './pull'
 
-import { PostgresDriver, type PostgresConfig } from './drivers/postgres'
+import { type PostgresConfig, PostgresDriver } from './drivers/postgres'
 import { type LibSQLConfig, LibSQLDriver } from './drivers/libsql'
 import { type MySQLConfig, MySQLDriver } from './drivers/mysql'
 

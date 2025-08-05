@@ -1,15 +1,12 @@
 import { createClient, type ResultSet } from '@libsql/client'
 import type { UnifiedQueryResult } from '..'
 import { createClient as tursoServerLessClient, type ResultSet as tursoServerLessResultSet } from '@tursodatabase/serverless/compat'
+import type { DriverOptions } from '../types'
 
 export interface LibSQLConfig {
   url: string
   authToken?: string
-  options?: {
-    experimental?: {
-      useTursoServerlessDriver?: boolean
-    }
-  }
+  options?: DriverOptions<{ experimental?: { useTursoServerlessDriver?: boolean } }>
 }
 
 export class LibSQLDriver {

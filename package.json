@@ -1,6 +1,6 @@
 {
   "name": "driftsql",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "author": "lasse vestergaard",
   "description": "A lightweight SQL client for TypeScript",
   "repository": "lassejlv/driftsql",
@@ -42,6 +42,7 @@
   "dependencies": {
     "@libsql/client": "^0.15.9",
     "@neondatabase/serverless": "^1.0.1",
+    "@sqlitecloud/drivers": "^1.0.507",
     "@tursodatabase/serverless": "^0.1.2",
     "@types/pg": "^8.15.4",
     "consola": "^3.4.2",
