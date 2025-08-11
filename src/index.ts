@@ -7,7 +7,7 @@ import { MySQLDriver } from './drivers/mysql'
 import { SqliteDriver } from './drivers/sqlite'
 
 // Re-export types and drivers for convenience
-export type { DatabaseDriver, QueryResult } from './types'
+export type { DatabaseDriver, QueryResult, QueryError, QueryField, ConnectionError } from './types'
 export { PostgresDriver } from './drivers/postgres'
 export { LibSQLDriver } from './drivers/libsql'
 export { MySQLDriver } from './drivers/mysql'

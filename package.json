@@ -1,6 +1,6 @@
 {
   "name": "driftsql",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "author": "lasse vestergaard",
   "description": "A lightweight SQL client for TypeScript",
   "repository": "lassejlv/driftsql",
