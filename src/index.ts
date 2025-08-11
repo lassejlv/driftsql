@@ -1,6 +1,10 @@
 import consola from 'consola'
 import type { DatabaseDriver, QueryResult } from './types'
 import { hasTransactionSupport, hasPreparedStatementSupport, DatabaseError } from './types'
+import { PostgresDriver } from './drivers/postgres'
+import { LibSQLDriver } from './drivers/libsql'
+import { MySQLDriver } from './drivers/mysql'
+import { SqliteDriver } from './drivers/sqlite'
 
 // Re-export types and drivers for convenience
 export type { DatabaseDriver, QueryResult } from './types'
@@ -202,22 +206,18 @@ export class SQLClient<DT = any> {
 
 // Factory functions for common use cases
 export function createPostgresClient<DT = any>(config: { connectionString?: string; experimental?: { http?: { url: string; apiKey?: string } } }) {
-  const { PostgresDriver } = require('./drivers/postgres')
   return new SQLClient<DT>({ driver: new PostgresDriver(config) })
 }
 
 export function createLibSQLClient<DT = any>(config: { url: string; authToken?: string; useTursoServerlessDriver?: boolean }) {
-  const { LibSQLDriver } = require('./drivers/libsql')
   return new SQLClient<DT>({ driver: new LibSQLDriver(config) })
 }
 
 export function createMySQLClient<DT = any>(config: { connectionString: string }) {
-  const { MySQLDriver } = require('./drivers/mysql')
   return new SQLClient<DT>({ driver: new MySQLDriver(config) })
 }
 
 export function createSqliteClient<DT = any>(config: { filename: string; readonly?: boolean }) {
-  const { SqliteDriver } = require('./drivers/sqlite')
   return new SQLClient<DT>({ driver: new SqliteDriver(config) })
 }
 
