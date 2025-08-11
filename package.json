@@ -1,6 +1,6 @@
 {
   "name": "driftsql",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "author": "lasse vestergaard",
   "description": "A lightweight SQL client for TypeScript",
   "repository": "lassejlv/driftsql",
@@ -27,6 +27,7 @@
     "test:types": "tsc --noEmit --skipLibCheck"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.34",
     "@vitest/coverage-v8": "^3.2.4",
     "automd": "^0.4.0",
@@ -45,6 +46,7 @@
     "@sqlitecloud/drivers": "^1.0.507",
     "@tursodatabase/serverless": "^0.1.2",
     "@types/pg": "^8.15.4",
+    "better-sqlite3": "^12.2.0",
     "consola": "^3.4.2",
     "driftsql": "^0.0.1",
     "drizzle-orm": "^0.44.2",
