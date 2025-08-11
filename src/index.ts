@@ -9,6 +9,9 @@ export { LibSQLDriver } from './drivers/libsql'
 export { MySQLDriver } from './drivers/mysql'
 export { SqliteDriver } from './drivers/sqlite'
 
+// Re-export inspection utilities
+export { inspectDB, inspectPostgres, inspectLibSQL, inspectMySQL, inspectSQLite } from './pull'
+
 export interface ClientOptions<T extends DatabaseDriver = DatabaseDriver> {
   driver: T
   fallbackDrivers?: DatabaseDriver[]

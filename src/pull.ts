@@ -1,9 +1,11 @@
-import { DriftSQLClient, type ClientOptions } from '.'
+import { PostgresDriver, LibSQLDriver, MySQLDriver, SqliteDriver, SQLClient } from '.'
+import type { DatabaseDriver } from './types'
 import fs from 'node:fs/promises'
 
-type Drivers = ClientOptions['drivers']
-
-const supportedDrivers = ['postgres', 'postgresHTTP', 'mysql', 'libsql'] as const
+interface InspectOptions {
+  driver: DatabaseDriver
+  outputFile?: string
+}
 
 // Helper function to add timeout to promises
 const withTimeout = <T>(promise: Promise<T>, timeoutMs = 30_000): Promise<T> => {
@@ -31,7 +33,7 @@ const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = fal
   const nullable = isNullable ? ' | null' : ''
   const lowerType = dataType.toLowerCase()
 
-  // Common types that work for both PostgreSQL and MySQL
+  // Common types that work for all databases
   switch (lowerType) {
     case 'uuid': {
       return `string${nullable}`
@@ -88,7 +90,7 @@ const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = fal
     }
     case 'json':
     case 'jsonb': {
-      return `any${nullable}` // or Record<string, any> if you prefer
+      return `any${nullable}`
     }
     case 'array': {
       return `any[]${nullable}`
@@ -104,7 +106,7 @@ const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = fal
     }
     case 'enum':
     case 'set': {
-      return `string${nullable}` // MySQL specific
+      return `string${nullable}`
     }
     default: {
       console.warn(`Unknown ${driverType} type: ${dataType}, defaulting to 'any'`)
@@ -113,35 +115,29 @@ const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = fal
   }
 }
 
-export const inspectDB = async (drivers: Drivers) => {
-  if (!drivers) throw new Error('No drivers provided for inspection')
+const getDriverType = (driver: DatabaseDriver): string => {
+  if (driver instanceof PostgresDriver) return 'postgres'
+  if (driver instanceof LibSQLDriver) return 'libsql'
+  if (driver instanceof MySQLDriver) return 'mysql'
+  if (driver instanceof SqliteDriver) return 'sqlite'
+  return 'unknown'
+}
 
-  // Check which driver is configured
-  const configuredDrivers = Object.keys(drivers).filter((key) => drivers[key as keyof Drivers] !== undefined)
+export const inspectDB = async (options: InspectOptions) => {
+  const { driver, outputFile = 'db-types.ts' } = options
+  const driverType = getDriverType(driver)
 
-  if (configuredDrivers.length === 0) {
-    throw new Error('No drivers are configured')
-  }
+  console.log(`Inspecting database using ${driverType} driver`)
 
-  const supportedConfiguredDrivers = configuredDrivers.filter((driver) => supportedDrivers.includes(driver as (typeof supportedDrivers)[number]))
-
-  if (supportedConfiguredDrivers.length === 0) {
-    throw new Error(`No supported drivers found. Configured: ${configuredDrivers.join(', ')}. Supported: ${supportedDrivers.join(', ')}`)
-  }
-
-  console.log(`Found supported drivers: ${supportedConfiguredDrivers.join(', ')}`)
-
-  const activeDriver = supportedConfiguredDrivers[0] // Get the first (and should be only) configured driver
+  const client = new SQLClient({ driver })
   let generatedTypes = ''
-
-  const client = new DriftSQLClient({ drivers })
 
   try {
     // Use different queries based on the driver type
     let tablesQuery: string
     let tableSchemaFilter: string | undefined
 
-    if (activeDriver === 'mysql') {
+    if (driverType === 'mysql') {
       // For MySQL, get the current database name first
       const dbResult = await withTimeout(
         retryQuery(() => client.query<{ database: string }>('SELECT DATABASE() as `database`', [])),
@@ -155,32 +151,35 @@ export const inspectDB = async (drivers: Drivers) => {
 
       console.log(`Using MySQL database: ${currentDatabase}`)
       tablesQuery = `SELECT TABLE_NAME as table_name
-                   FROM information_schema.tables 
-                   WHERE TABLE_SCHEMA = ? 
+                   FROM information_schema.tables
+                   WHERE TABLE_SCHEMA = ?
                    AND TABLE_TYPE = 'BASE TABLE'
                    ORDER BY TABLE_NAME`
       tableSchemaFilter = currentDatabase
-    } else if (activeDriver === 'postgres' || activeDriver === 'postgresHTTP') {
+    } else if (driverType === 'postgres') {
       // PostgreSQL
-      tablesQuery = `SELECT table_name 
-                   FROM information_schema.tables 
-                   WHERE table_schema = $1 
+      tablesQuery = `SELECT table_name
+                   FROM information_schema.tables
+                   WHERE table_schema = $1
                    AND table_type = 'BASE TABLE'
                    ORDER BY table_name`
       tableSchemaFilter = 'public'
-    } else {
-      // LibSQL (SQLite)
-      tablesQuery = `SELECT name as table_name 
-                   FROM sqlite_master 
-                   WHERE type = 'table' 
+    } else if (driverType === 'libsql' || driverType === 'sqlite') {
+      // LibSQL/SQLite
+      tablesQuery = `SELECT name as table_name
+                   FROM sqlite_master
+                   WHERE type = 'table'
                    ORDER BY name`
-      tableSchemaFilter = undefined // LibSQL does not have schemas like PostgreSQL or MySQL
+      tableSchemaFilter = undefined
+    } else {
+      throw new Error(`Unsupported driver type: ${driverType}`)
     }
 
     const tables = await withTimeout(
       retryQuery(() => client.query<{ table_name: string }>(tablesQuery, tableSchemaFilter ? [tableSchemaFilter] : [])),
       30_000,
     )
+
     console.log('Tables in the database:', tables.rows.map((t) => t.table_name).join(', '))
 
     let processedTables = 0
@@ -192,43 +191,42 @@ export const inspectDB = async (drivers: Drivers) => {
       console.log(`[${processedTables}/${totalTables}] Inspecting table: ${tableName}`)
 
       try {
-        // Get columns with nullability information - use different queries for different drivers
+        // Get columns with nullability information
         let columnsQuery: string
         let queryParams: (string | null)[]
 
-        if (activeDriver === 'mysql') {
+        if (driverType === 'mysql') {
           columnsQuery = `
-          SELECT 
-            COLUMN_NAME as column_name, 
-            DATA_TYPE as data_type, 
+          SELECT
+            COLUMN_NAME as column_name,
+            DATA_TYPE as data_type,
             IS_NULLABLE as is_nullable,
             COLUMN_DEFAULT as column_default
-          FROM information_schema.columns 
-          WHERE TABLE_NAME = ? 
+          FROM information_schema.columns
+          WHERE TABLE_NAME = ?
           AND TABLE_SCHEMA = ?
           ORDER BY ORDINAL_POSITION
         `
           queryParams = [tableName, tableSchemaFilter!]
-        } else if (activeDriver === 'postgres' || activeDriver === 'postgresHTTP') {
-          // PostgreSQL
+        } else if (driverType === 'postgres') {
           columnsQuery = `
-          SELECT 
-            column_name, 
-            data_type, 
+          SELECT
+            column_name,
+            data_type,
             is_nullable,
             column_default
-          FROM information_schema.columns 
-          WHERE table_name = $1 
+          FROM information_schema.columns
+          WHERE table_name = $1
           AND table_schema = $2
           ORDER BY ordinal_position
         `
           queryParams = [tableName, tableSchemaFilter!]
         } else {
-          // LibSQL (SQLite)
+          // LibSQL/SQLite
           columnsQuery = `
-          SELECT 
-            name as column_name, 
-            type as data_type, 
+          SELECT
+            name as column_name,
+            type as data_type,
             CASE WHEN "notnull" = 0 THEN 'YES' ELSE 'NO' END as is_nullable,
             dflt_value as column_default
           FROM pragma_table_info(?)
@@ -246,7 +244,7 @@ export const inspectDB = async (drivers: Drivers) => {
               column_default: string | null
             }>(columnsQuery, queryParams),
           ),
-          15_000, // Shorter timeout for individual table queries
+          15_000,
         )
 
         if (columns.rows.length === 0) {
@@ -256,7 +254,7 @@ export const inspectDB = async (drivers: Drivers) => {
 
         console.log(`Columns in ${tableName}:`, columns.rows.map((c) => `${c.column_name} (${c.data_type}${c.is_nullable === 'YES' ? ', nullable' : ''})`).join(', '))
 
-        // Deduplicate columns by name (keep the first occurrence)
+        // Deduplicate columns by name
         const uniqueColumns = new Map<string, (typeof columns.rows)[0]>()
         columns.rows.forEach((col) => {
           if (!uniqueColumns.has(col.column_name)) {
@@ -266,7 +264,7 @@ export const inspectDB = async (drivers: Drivers) => {
 
         generatedTypes += `export interface ${tableName.charAt(0).toUpperCase() + tableName.slice(1)} {\n`
         for (const col of uniqueColumns.values()) {
-          const tsType = mapDatabaseTypeToTypeScript(col.data_type, col.is_nullable === 'YES', activeDriver)
+          const tsType = mapDatabaseTypeToTypeScript(col.data_type, col.is_nullable === 'YES', driverType)
           generatedTypes += `  ${col.column_name}: ${tsType};\n`
         }
         generatedTypes += '}\n\n'
@@ -280,20 +278,41 @@ export const inspectDB = async (drivers: Drivers) => {
     // Generate the Database interface
     generatedTypes += 'export interface Database {\n'
     for (const table of tables.rows) {
-      const tableName = table.table_name.charAt(0).toUpperCase() + table.table_name.slice(1)
-      generatedTypes += `  ${tableName}: ${tableName};\n`
+      const interfaceName = table.table_name.charAt(0).toUpperCase() + table.table_name.slice(1)
+      generatedTypes += `  ${table.table_name}: ${interfaceName};\n`
     }
     generatedTypes += '}\n\n'
 
-    await fs.writeFile('db-types.ts', generatedTypes, 'utf8')
-    console.log('TypeScript types written to db-types.ts')
+    await fs.writeFile(outputFile, generatedTypes, 'utf8')
+    console.log(`TypeScript types written to ${outputFile}`)
     console.log(`Successfully processed ${processedTables} tables`)
   } catch (error) {
     console.error('Fatal error during database inspection:', error)
-    process.exit(1)
+    throw error
+  } finally {
+    await client.close()
   }
+}
 
-  process.exit(0)
+// Convenience functions for each driver type
+export const inspectPostgres = async (config: { connectionString?: string; experimental?: { http?: { url: string; apiKey?: string } } }, outputFile?: string) => {
+  const driver = new PostgresDriver(config)
+  return inspectDB({ driver, outputFile })
+}
+
+export const inspectLibSQL = async (config: { url: string; authToken?: string; useTursoServerlessDriver?: boolean }, outputFile?: string) => {
+  const driver = new LibSQLDriver(config)
+  return inspectDB({ driver, outputFile })
+}
+
+export const inspectMySQL = async (config: { connectionString: string }, outputFile?: string) => {
+  const driver = new MySQLDriver(config)
+  return inspectDB({ driver, outputFile })
+}
+
+export const inspectSQLite = async (config: { filename: string; readonly?: boolean }, outputFile?: string) => {
+  const driver = new SqliteDriver(config)
+  return inspectDB({ driver, outputFile })
 }
 
 export default inspectDB
