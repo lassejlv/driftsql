@@ -7,3 +7,4 @@ dist
 *.log*
 *.env*
 test.ts
+mysql-types.ts
