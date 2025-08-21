@@ -1,2 +1,6 @@
 test.ts
 .env
+mysql-types.ts
+build.ts
+src
+test.ts

@@ -5,6 +5,7 @@ import { PostgresDriver } from './drivers/postgres'
 import { LibSQLDriver } from './drivers/libsql'
 import { MySQLDriver } from './drivers/mysql'
 import { SqliteDriver } from './drivers/sqlite'
+import { QueryError } from './types'
 
 // Re-export types and drivers for convenience
 export type { DatabaseDriver, QueryResult, QueryError, QueryField, ConnectionError } from './types'
@@ -71,22 +72,14 @@ export class SQLClient<DT = any> {
 
   // Helper methods for common database operations
   async findFirst<K extends keyof DT>(table: K, where?: Partial<DT[K]>): Promise<DT[K] | null> {
-    const tableName = String(table)
-    const whereEntries = Object.entries(where || {})
+    if (!this.primaryDriver.findFirst) throw new DatabaseError('Primary driver does not support findFirst', this.primaryDriver.constructor.name)
 
-    let sql = `SELECT * FROM ${tableName}`
-    let params: any[] = []
-
-    if (whereEntries.length > 0) {
-      const whereClause = whereEntries.map((_, index) => `${whereEntries[index]?.[0]} = $${index + 1}`).join(' AND ')
-      sql += ` WHERE ${whereClause}`
-      params = whereEntries.map(([, value]) => value)
+    try {
+      const response = await this.primaryDriver.findFirst(table as string, where)
+      return response!.rows[0] || null
+    } catch (error) {
+      throw new QueryError('findFirst', `Error finding first in ${String(table)}`, error as Error)
     }
-
-    sql += ' LIMIT 1'
-
-    const result = await this.query<DT[K]>(sql, params)
-    return result.rows[0] || null
   }
 
   async findMany<K extends keyof DT>(
@@ -97,91 +90,47 @@ export class SQLClient<DT = any> {
       offset?: number
     },
   ): Promise<DT[K][]> {
-    const tableName = String(table)
-    const { where, limit, offset } = options || {}
-    const whereEntries = Object.entries(where || {})
+    if (!this.primaryDriver.findMany) throw new DatabaseError('Primary driver does not support findMany', this.primaryDriver.constructor.name)
 
-    let sql = `SELECT * FROM ${tableName}`
-    let params: any[] = []
-
-    if (whereEntries.length > 0) {
-      const whereClause = whereEntries.map((_, index) => `${whereEntries[index]?.[0]} = $${index + 1}`).join(' AND ')
-      sql += ` WHERE ${whereClause}`
-      params = whereEntries.map(([, value]) => value)
+    try {
+      const response = await this.primaryDriver.findMany(table as string, options)
+      return response.rows as DT[K][]
+    } catch (error) {
+      throw new QueryError('findMany', `Error finding many in ${String(table)}`, error as Error)
     }
-
-    if (typeof limit === 'number' && limit > 0) {
-      sql += ` LIMIT $${params.length + 1}`
-      params.push(limit)
-    }
-
-    if (typeof offset === 'number' && offset > 0) {
-      sql += ` OFFSET $${params.length + 1}`
-      params.push(offset)
-    }
-
-    const result = await this.query<DT[K]>(sql, params)
-    return result.rows
   }
 
   async insert<K extends keyof DT>(table: K, data: Partial<DT[K]>): Promise<DT[K]> {
-    const tableName = String(table)
-    const keys = Object.keys(data)
-    const values = Object.values(data)
+    if (!this.primaryDriver.insert) throw new DatabaseError('Primary driver does not support insert', this.primaryDriver.constructor.name)
 
-    if (keys.length === 0) {
-      throw new Error('No data provided for insert')
+    try {
+      const response = await this.primaryDriver.insert(table as string, data)
+      return response.rows[0] as DT[K]
+    } catch (error) {
+      throw new QueryError('insert', `Error inserting into ${String(table)}`, error as Error)
     }
-
-    const placeholders = keys.map((_, index) => `$${index + 1}`).join(', ')
-    const sql = `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`
-
-    const result = await this.query<DT[K]>(sql, values)
-
-    if (!result.rows[0]) {
-      throw new Error('Insert failed: No data returned')
-    }
-
-    return result.rows[0]
   }
 
   async update<K extends keyof DT>(table: K, data: Partial<DT[K]>, where: Partial<DT[K]>): Promise<DT[K] | null> {
-    const tableName = String(table)
-    const setEntries = Object.entries(data)
-    const whereEntries = Object.entries(where)
+    if (!this.primaryDriver.update) throw new DatabaseError('Primary driver does not support update', this.primaryDriver.constructor.name)
 
-    if (setEntries.length === 0) {
-      throw new Error('No data provided for update')
+    try {
+      const response = await this.primaryDriver.update(table as string, data, where)
+      return response.rows[0] || null
+    } catch (error) {
+      throw new QueryError('update', `Error updating ${String(table)}`, error as Error)
     }
-
-    if (whereEntries.length === 0) {
-      throw new Error('No conditions provided for update')
-    }
-
-    const setClause = setEntries.map((_, index) => `${setEntries[index]?.[0]} = $${index + 1}`).join(', ')
-    const whereClause = whereEntries.map((_, index) => `${whereEntries[index]?.[0]} = $${setEntries.length + index + 1}`).join(' AND ')
-
-    const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${whereClause} RETURNING *`
-    const params = [...setEntries.map(([, value]) => value), ...whereEntries.map(([, value]) => value)]
-
-    const result = await this.query<DT[K]>(sql, params)
-    return result.rows[0] || null
   }
 
   async delete<K extends keyof DT>(table: K, where: Partial<DT[K]>): Promise<number> {
-    const tableName = String(table)
-    const whereEntries = Object.entries(where)
+    if (!this.primaryDriver.delete) throw new DatabaseError('Primary driver does not support delete', this.primaryDriver.constructor.name)
 
-    if (whereEntries.length === 0) {
-      throw new Error('No conditions provided for delete')
+    try {
+      const affectedRows = await this.primaryDriver.delete(table as string, where)
+      return affectedRows
+    } catch (error) {
+      throw new QueryError('delete', `Error deleting from ${String(table)}`, error as Error)
     }
-
-    const whereClause = whereEntries.map((_, index) => `${whereEntries[index]?.[0]} = $${index + 1}`).join(' AND ')
-    const sql = `DELETE FROM ${tableName} WHERE ${whereClause}`
-    const params = whereEntries.map(([, value]) => value)
-
-    const result = await this.query<DT[K]>(sql, params)
-    return result.rowCount || 0
   }
 
   // Get the primary driver (useful for driver-specific operations)

@@ -15,6 +15,11 @@ export interface QueryField {
 // Base driver interface that all drivers must implement
 export interface DatabaseDriver {
   query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>>
+  findFirst?(table: string, where?: Record<string, any>): Promise<QueryResult<any> | null>
+  findMany?(table: string, options?: { where?: Record<string, any>; limit?: number; offset?: number }): Promise<QueryResult<any>>
+  insert?(table: string, data: Record<string, any>): Promise<QueryResult<any>>
+  update?(table: string, data: Record<string, any>, where: Record<string, any>): Promise<QueryResult<any>>
+  delete?(table: string, where: Record<string, any>): Promise<number>
   close(): Promise<void>
 }
 

@@ -1,33 +1,30 @@
 {
   "name": "driftsql",
-  "version": "1.0.16",
-  "author": "lasse vestergaard",
+  "version": "1.0.20",
   "description": "A lightweight SQL client for TypeScript",
-  "repository": "lassejlv/driftsql",
-  "license": "MIT",
-  "sideEffects": false,
-  "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
-    }
-  },
-  "files": [
-    "dist"
-  ],
   "scripts": {
-    "build": "unbuild",
-    "dev": "vitest dev",
-    "lint": "eslint . && prettier -c .",
-    "lint:fix": "automd && eslint . --fix && prettier -w .",
-    "prepack": "pnpm build",
-    "release": "pnpm test && changelogen --release && npm publish && git push --follow-tags",
-    "test": "pnpm lint && pnpm test:types && vitest run --coverage",
-    "test:types": "tsc --noEmit --skipLibCheck"
+    "build": "bun build.ts"
+  },
+  "author": "lasse vestergaard",
+  "license": "MIT",
+  "dependencies": {
+    "@libsql/client": "^0.15.9",
+    "@neondatabase/serverless": "^1.0.1",
+    "@sqlitecloud/drivers": "^1.0.507",
+    "@tursodatabase/serverless": "^0.1.2",
+    "@types/pg": "^8.15.4",
+    "better-sqlite3": "^12.2.0",
+    "consola": "^3.4.2",
+    "driftsql": "^1.0.19",
+    "drizzle-orm": "^0.44.2",
+    "ky": "^1.8.1",
+    "mysql2": "^3.14.1",
+    "pg": "^8.16.3",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "^1.2.20",
     "@types/node": "^22.15.34",
     "@vitest/coverage-v8": "^3.2.4",
     "automd": "^0.4.0",
@@ -38,21 +35,5 @@
     "typescript": "^5.8.3",
     "unbuild": "^3.5.0",
     "vitest": "^3.2.4"
-  },
-  "packageManager": "pnpm@10.12.1",
-  "dependencies": {
-    "@libsql/client": "^0.15.9",
-    "@neondatabase/serverless": "^1.0.1",
-    "@sqlitecloud/drivers": "^1.0.507",
-    "@tursodatabase/serverless": "^0.1.2",
-    "@types/pg": "^8.15.4",
-    "better-sqlite3": "^12.2.0",
-    "consola": "^3.4.2",
-    "driftsql": "^0.0.1",
-    "drizzle-orm": "^0.44.2",
-    "ky": "^1.8.1",
-    "mysql2": "^3.14.1",
-    "pg": "^8.16.3",
-    "postgres": "^3.4.7"
   }
 }
