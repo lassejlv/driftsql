@@ -1,6 +1,7 @@
 {
   "name": "driftsql",
-  "version": "1.0.20",
+  "version": "1.0.22",
+  "main": "dist/index.js",
   "description": "A lightweight SQL client for TypeScript",
   "scripts": {
     "build": "bun build.ts"
@@ -20,7 +21,9 @@
     "ky": "^1.8.1",
     "mysql2": "^3.14.1",
     "pg": "^8.16.3",
-    "postgres": "^3.4.7"
+    "pg-connection-string": "^2.9.1",
+    "postgres": "^3.4.7",
+    "zod": "^4.0.17"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

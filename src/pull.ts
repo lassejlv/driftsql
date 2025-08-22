@@ -1,4 +1,5 @@
-import { PostgresDriver, LibSQLDriver, MySQLDriver, SqliteDriver, SQLClient } from '.'
+import consola from 'consola'
+import { PostgresDriver, LibSQLDriver, MySQLDriver, SqliteDriver, SQLClient, NeonDriver } from '.'
 import type { DatabaseDriver } from './types'
 import fs from 'node:fs/promises'
 
@@ -7,12 +8,10 @@ interface InspectOptions {
   outputFile?: string
 }
 
-// Helper function to add timeout to promises
 const withTimeout = <T>(promise: Promise<T>, timeoutMs = 30_000): Promise<T> => {
   return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Query timeout after ${timeoutMs}ms`)), timeoutMs))])
 }
 
-// Helper function to retry queries with exponential backoff
 const retryQuery = async <T>(queryFn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -22,7 +21,7 @@ const retryQuery = async <T>(queryFn: () => Promise<T>, maxRetries = 3, baseDela
         throw error
       }
       const delay = baseDelay * Math.pow(2, attempt - 1)
-      console.warn(`Query attempt ${attempt} failed, retrying in ${delay}ms...`, error)
+      consola.warn(`Query attempt ${attempt} failed, retrying in ${delay}ms...`, error)
       await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
@@ -33,7 +32,6 @@ const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = fal
   const nullable = isNullable ? ' | null' : ''
   const lowerType = dataType.toLowerCase()
 
-  // Common types that work for all databases
   switch (lowerType) {
     case 'uuid': {
       return `string${nullable}`
@@ -109,7 +107,7 @@ const mapDatabaseTypeToTypeScript = (dataType: string, isNullable: boolean = fal
       return `string${nullable}`
     }
     default: {
-      console.warn(`Unknown ${driverType} type: ${dataType}, defaulting to 'any'`)
+      consola.warn(`Unknown ${driverType} type: ${dataType}, defaulting to 'any'`)
       return `any${nullable}`
     }
   }
@@ -120,6 +118,7 @@ const getDriverType = (driver: DatabaseDriver): string => {
   if (driver instanceof LibSQLDriver) return 'libsql'
   if (driver instanceof MySQLDriver) return 'mysql'
   if (driver instanceof SqliteDriver) return 'sqlite'
+  if (driver instanceof NeonDriver) return 'neon'
   return 'unknown'
 }
 
@@ -127,7 +126,7 @@ export const inspectDB = async (options: InspectOptions) => {
   const { driver, outputFile = 'db-types.ts' } = options
   const driverType = getDriverType(driver)
 
-  console.log(`Inspecting database using ${driverType} driver`)
+  consola.log(`Inspecting database using ${driverType} driver`)
 
   const client = new SQLClient({ driver })
   let generatedTypes = ''
@@ -149,7 +148,7 @@ export const inspectDB = async (options: InspectOptions) => {
         throw new Error('Could not determine current MySQL database name')
       }
 
-      console.log(`Using MySQL database: ${currentDatabase}`)
+      consola.log(`Using MySQL database: ${currentDatabase}`)
       tablesQuery = `SELECT TABLE_NAME as table_name
                    FROM information_schema.tables
                    WHERE TABLE_SCHEMA = ?
@@ -158,6 +157,14 @@ export const inspectDB = async (options: InspectOptions) => {
       tableSchemaFilter = currentDatabase
     } else if (driverType === 'postgres') {
       // PostgreSQL
+      tablesQuery = `SELECT table_name
+                   FROM information_schema.tables
+                   WHERE table_schema = $1
+                   AND table_type = 'BASE TABLE'
+                   ORDER BY table_name`
+      tableSchemaFilter = 'public'
+    } else if (driverType === 'neon') {
+      // Neon (PostgreSQL-compatible)
       tablesQuery = `SELECT table_name
                    FROM information_schema.tables
                    WHERE table_schema = $1
@@ -180,7 +187,7 @@ export const inspectDB = async (options: InspectOptions) => {
       30_000,
     )
 
-    console.log('Tables in the database:', tables.rows.map((t) => t.table_name).join(', '))
+    consola.log('Tables in the database:', tables.rows.map((t) => t.table_name).join(', '))
 
     let processedTables = 0
     const totalTables = tables.rows.length
@@ -188,7 +195,7 @@ export const inspectDB = async (options: InspectOptions) => {
     for (const table of tables.rows) {
       const tableName = table.table_name
       processedTables++
-      console.log(`[${processedTables}/${totalTables}] Inspecting table: ${tableName}`)
+      consola.log(`[${processedTables}/${totalTables}] Inspecting table: ${tableName}`)
 
       try {
         // Get columns with nullability information
@@ -208,7 +215,7 @@ export const inspectDB = async (options: InspectOptions) => {
           ORDER BY ORDINAL_POSITION
         `
           queryParams = [tableName, tableSchemaFilter!]
-        } else if (driverType === 'postgres') {
+        } else if (driverType === 'postgres' || driverType === 'neon') {
           columnsQuery = `
           SELECT
             column_name,
@@ -248,11 +255,11 @@ export const inspectDB = async (options: InspectOptions) => {
         )
 
         if (columns.rows.length === 0) {
-          console.log(`No columns found for table: ${tableName}`)
+          consola.log(`No columns found for table: ${tableName}`)
           continue
         }
 
-        console.log(`Columns in ${tableName}:`, columns.rows.map((c) => `${c.column_name} (${c.data_type}${c.is_nullable === 'YES' ? ', nullable' : ''})`).join(', '))
+        consola.log(`Columns in ${tableName}:`, columns.rows.map((c) => `${c.column_name} (${c.data_type}${c.is_nullable === 'YES' ? ', nullable' : ''})`).join(', '))
 
         // Deduplicate columns by name
         const uniqueColumns = new Map<string, (typeof columns.rows)[0]>()
@@ -269,8 +276,8 @@ export const inspectDB = async (options: InspectOptions) => {
         }
         generatedTypes += '}\n\n'
       } catch (error) {
-        console.error(`Failed to process table ${tableName}:`, error)
-        console.log(`Skipping table ${tableName} and continuing...`)
+        consola.error(`Failed to process table ${tableName}:`, error)
+        consola.log(`Skipping table ${tableName} and continuing...`)
         continue
       }
     }
@@ -284,23 +291,22 @@ export const inspectDB = async (options: InspectOptions) => {
     generatedTypes += '}\n\n'
 
     await fs.writeFile(outputFile, generatedTypes, 'utf8')
-    console.log(`TypeScript types written to ${outputFile}`)
-    console.log(`Successfully processed ${processedTables} tables`)
+    consola.log(`TypeScript types written to ${outputFile}`)
+    consola.log(`Successfully processed ${processedTables} tables`)
   } catch (error) {
-    console.error('Fatal error during database inspection:', error)
+    consola.error('Fatal error during database inspection:', error)
     throw error
   } finally {
     await client.close()
   }
 }
 
-// Convenience functions for each driver type
 export const inspectPostgres = async (config: { connectionString?: string; experimental?: { http?: { url: string; apiKey?: string } } }, outputFile?: string) => {
   const driver = new PostgresDriver(config)
   return inspectDB({ driver, outputFile })
 }
 
-export const inspectLibSQL = async (config: { url: string; authToken?: string; useTursoServerlessDriver?: boolean }, outputFile?: string) => {
+export const inspectLibSQL = async (config: { url: string; authToken?: string }, outputFile?: string) => {
   const driver = new LibSQLDriver(config)
   return inspectDB({ driver, outputFile })
 }
@@ -312,6 +318,11 @@ export const inspectMySQL = async (config: { connectionString: string }, outputF
 
 export const inspectSQLite = async (config: { filename: string; readonly?: boolean }, outputFile?: string) => {
   const driver = new SqliteDriver(config)
+  return inspectDB({ driver, outputFile })
+}
+
+export const inspectNeon = async (config: { connectionString: string }, outputFile?: string) => {
+  const driver = new NeonDriver(config)
   return inspectDB({ driver, outputFile })
 }
 

@@ -13,6 +13,7 @@ export { PostgresDriver } from './drivers/postgres'
 export { LibSQLDriver } from './drivers/libsql'
 export { MySQLDriver } from './drivers/mysql'
 export { SqliteDriver } from './drivers/sqlite'
+export { NeonDriver } from './drivers/neon'
 
 // Re-export inspection utilities
 export { inspectDB, inspectPostgres, inspectLibSQL, inspectMySQL, inspectSQLite } from './pull'
