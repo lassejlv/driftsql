@@ -1,22 +1,14 @@
 import consola from 'consola'
 import type { DatabaseDriver, QueryResult } from './types'
 import { hasTransactionSupport, hasPreparedStatementSupport, DatabaseError } from './types'
-import { PostgresDriver } from './drivers/postgres'
-import { LibSQLDriver } from './drivers/libsql'
-import { MySQLDriver } from './drivers/mysql'
-import { SqliteDriver } from './drivers/sqlite'
 import { QueryError } from './types'
 
-// Re-export types and drivers for convenience
 export type { DatabaseDriver, QueryResult, QueryError, QueryField, ConnectionError } from './types'
 export { PostgresDriver } from './drivers/postgres'
 export { LibSQLDriver } from './drivers/libsql'
 export { MySQLDriver } from './drivers/mysql'
-export { SqliteDriver } from './drivers/sqlite'
 export { NeonDriver } from './drivers/neon'
-
-// Re-export inspection utilities
-export { inspectDB, inspectPostgres, inspectLibSQL, inspectMySQL, inspectSQLite } from './pull'
+export { inspectDB } from './pull'
 
 export interface ClientOptions<T extends DatabaseDriver = DatabaseDriver> {
   driver: T
@@ -71,7 +63,6 @@ export class SQLClient<DT = any> {
     return await this.primaryDriver.prepare(sql)
   }
 
-  // Helper methods for common database operations
   async findFirst<K extends keyof DT>(table: K, where?: Partial<DT[K]>): Promise<DT[K] | null> {
     if (!this.primaryDriver.findFirst) throw new DatabaseError('Primary driver does not support findFirst', this.primaryDriver.constructor.name)
 
@@ -134,12 +125,10 @@ export class SQLClient<DT = any> {
     }
   }
 
-  // Get the primary driver (useful for driver-specific operations)
   getDriver(): DatabaseDriver {
     return this.primaryDriver
   }
 
-  // Check driver capabilities
   supportsTransactions(): boolean {
     return hasTransactionSupport(this.primaryDriver)
   }
@@ -152,23 +141,6 @@ export class SQLClient<DT = any> {
     const drivers = [this.primaryDriver, ...this.fallbackDrivers]
     await Promise.all(drivers.map((driver) => driver.close().catch((err) => consola.warn(`Error closing ${driver.constructor.name}:`, err))))
   }
-}
-
-// Factory functions for common use cases
-export function createPostgresClient<DT = any>(config: { connectionString?: string; experimental?: { http?: { url: string; apiKey?: string } } }) {
-  return new SQLClient<DT>({ driver: new PostgresDriver(config) })
-}
-
-export function createLibSQLClient<DT = any>(config: { url: string; authToken?: string; useTursoServerlessDriver?: boolean }) {
-  return new SQLClient<DT>({ driver: new LibSQLDriver(config) })
-}
-
-export function createMySQLClient<DT = any>(config: { connectionString: string }) {
-  return new SQLClient<DT>({ driver: new MySQLDriver(config) })
-}
-
-export function createSqliteClient<DT = any>(config: { filename: string; readonly?: boolean }) {
-  return new SQLClient<DT>({ driver: new SqliteDriver(config) })
 }
 
 // Legacy export for backward compatibility

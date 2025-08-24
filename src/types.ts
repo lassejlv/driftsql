@@ -1,4 +1,3 @@
-// Core result type for all database operations
 export interface QueryResult<T = any> {
   rows: T[]
   rowCount: number
@@ -6,13 +5,11 @@ export interface QueryResult<T = any> {
   fields?: QueryField[]
 }
 
-// Field information for query results
 export interface QueryField {
   name: string
   dataTypeID: number
 }
 
-// Base driver interface that all drivers must implement
 export interface DatabaseDriver {
   query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>>
   findFirst?(table: string, where?: Record<string, any>): Promise<QueryResult<any> | null>
@@ -23,7 +20,6 @@ export interface DatabaseDriver {
   close(): Promise<void>
 }
 
-// Optional interfaces for advanced features
 export interface TransactionCapable {
   transaction<T>(callback: (driver: DatabaseDriver) => Promise<T>): Promise<T>
 }
@@ -37,7 +33,6 @@ export interface PreparedStatement {
   finalize(): Promise<void>
 }
 
-// Type guards
 export function hasTransactionSupport(driver: DatabaseDriver): driver is DatabaseDriver & TransactionCapable {
   return 'transaction' in driver && typeof (driver as any).transaction === 'function'
 }
@@ -46,7 +41,6 @@ export function hasPreparedStatementSupport(driver: DatabaseDriver): driver is D
   return 'prepare' in driver && typeof (driver as any).prepare === 'function'
 }
 
-// Error classes
 export class DatabaseError extends Error {
   constructor(
     message: string,
@@ -72,7 +66,6 @@ export class ConnectionError extends DatabaseError {
   }
 }
 
-// Generic driver options
 export interface DriverOptions {
   [key: string]: any
 }

@@ -1,5 +1,5 @@
 import consola from 'consola'
-import { PostgresDriver, LibSQLDriver, MySQLDriver, SqliteDriver, SQLClient, NeonDriver } from '.'
+import { PostgresDriver, LibSQLDriver, MySQLDriver, SQLClient, NeonDriver } from '.'
 import type { DatabaseDriver } from './types'
 import fs from 'node:fs/promises'
 
@@ -117,7 +117,6 @@ const getDriverType = (driver: DatabaseDriver): string => {
   if (driver instanceof PostgresDriver) return 'postgres'
   if (driver instanceof LibSQLDriver) return 'libsql'
   if (driver instanceof MySQLDriver) return 'mysql'
-  if (driver instanceof SqliteDriver) return 'sqlite'
   if (driver instanceof NeonDriver) return 'neon'
   return 'unknown'
 }
@@ -155,16 +154,8 @@ export const inspectDB = async (options: InspectOptions) => {
                    AND TABLE_TYPE = 'BASE TABLE'
                    ORDER BY TABLE_NAME`
       tableSchemaFilter = currentDatabase
-    } else if (driverType === 'postgres') {
+    } else if (driverType === 'postgres' || driverType === 'neon') {
       // PostgreSQL
-      tablesQuery = `SELECT table_name
-                   FROM information_schema.tables
-                   WHERE table_schema = $1
-                   AND table_type = 'BASE TABLE'
-                   ORDER BY table_name`
-      tableSchemaFilter = 'public'
-    } else if (driverType === 'neon') {
-      // Neon (PostgreSQL-compatible)
       tablesQuery = `SELECT table_name
                    FROM information_schema.tables
                    WHERE table_schema = $1
@@ -299,31 +290,6 @@ export const inspectDB = async (options: InspectOptions) => {
   } finally {
     await client.close()
   }
-}
-
-export const inspectPostgres = async (config: { connectionString?: string; experimental?: { http?: { url: string; apiKey?: string } } }, outputFile?: string) => {
-  const driver = new PostgresDriver(config)
-  return inspectDB({ driver, outputFile })
-}
-
-export const inspectLibSQL = async (config: { url: string; authToken?: string }, outputFile?: string) => {
-  const driver = new LibSQLDriver(config)
-  return inspectDB({ driver, outputFile })
-}
-
-export const inspectMySQL = async (config: { connectionString: string }, outputFile?: string) => {
-  const driver = new MySQLDriver(config)
-  return inspectDB({ driver, outputFile })
-}
-
-export const inspectSQLite = async (config: { filename: string; readonly?: boolean }, outputFile?: string) => {
-  const driver = new SqliteDriver(config)
-  return inspectDB({ driver, outputFile })
-}
-
-export const inspectNeon = async (config: { connectionString: string }, outputFile?: string) => {
-  const driver = new NeonDriver(config)
-  return inspectDB({ driver, outputFile })
 }
 
 export default inspectDB

@@ -1,42 +1,32 @@
 {
   "name": "driftsql",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "main": "dist/index.js",
   "description": "A lightweight SQL client for TypeScript",
   "scripts": {
     "build": "bun build.ts"
   },
-  "author": "lasse vestergaard",
+  "author": "Lasse Vestergaard",
+  "repository": {
+    "type": "git",
+    "url": "lassejlv/driftsql"
+  },
   "license": "MIT",
   "dependencies": {
     "@libsql/client": "^0.15.9",
     "@neondatabase/serverless": "^1.0.1",
     "@sqlitecloud/drivers": "^1.0.507",
     "@tursodatabase/serverless": "^0.1.2",
-    "@types/pg": "^8.15.4",
-    "better-sqlite3": "^12.2.0",
     "consola": "^3.4.2",
     "driftsql": "^1.0.19",
-    "drizzle-orm": "^0.44.2",
     "ky": "^1.8.1",
     "mysql2": "^3.14.1",
-    "pg": "^8.16.3",
-    "pg-connection-string": "^2.9.1",
     "postgres": "^3.4.7",
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.2.20",
-    "@types/node": "^22.15.34",
-    "@vitest/coverage-v8": "^3.2.4",
-    "automd": "^0.4.0",
-    "changelogen": "^0.6.1",
-    "eslint": "^9.30.0",
-    "eslint-config-unjs": "^0.4.2",
     "prettier": "^3.6.2",
-    "typescript": "^5.8.3",
-    "unbuild": "^3.5.0",
-    "vitest": "^3.2.4"
+    "typescript": "^5.8.3"
   }
 }

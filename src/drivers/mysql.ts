@@ -11,8 +11,6 @@ export class MySQLDriver implements DatabaseDriver, TransactionCapable {
   private client: ReturnType<typeof mysql.createConnection>
 
   constructor(config: MySQLConfig) {
-    consola.warn('MySQL client is experimental and may not be compatible with the helper functions, since they originally designed for PostgreSQL and libsql. But .query() method should work.')
-
     try {
       this.client = mysql.createConnection(config.connectionString)
     } catch (error) {
