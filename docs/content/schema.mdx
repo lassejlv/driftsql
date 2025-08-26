@@ -1,0 +1,471 @@
+---
+title: Schema Inspection
+description: Generate TypeScript interfaces from your database schema for full type safety with DriftSQL.
+icon: FileCode
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs'
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Schema Inspection
+
+DriftSQL can automatically generate TypeScript interfaces from your database schema, providing full type safety for your database operations.
+
+## Overview
+
+The `inspectDB` function connects to your database, reads the schema information, and generates TypeScript interfaces for each table. This enables:
+
+- **Full type safety** for all database operations
+- **IntelliSense support** in your IDE
+- **Compile-time error checking** for invalid queries
+- **Auto-completion** for table and column names
+
+## Basic Usage
+
+```typescript
+import { inspectDB, PostgresDriver } from 'driftsql'
+
+const driver = new PostgresDriver({
+  connectionString: 'postgresql://user:password@localhost:5432/mydb',
+})
+
+// Generate types for all tables
+await inspectDB({
+  driver,
+  outputFile: 'db-types.ts', // optional, defaults to 'db-types.ts'
+})
+```
+
+## Configuration
+
+### InspectOptions
+
+```typescript
+interface InspectOptions {
+  driver: DatabaseDriver // Database driver to use for inspection
+  outputFile?: string // Output file path (default: 'db-types.ts')
+}
+```
+
+## Supported Databases
+
+Schema inspection works with all supported database drivers:
+
+<Tabs items={['PostgreSQL', 'MySQL', 'LibSQL/SQLite', 'Neon']}>
+  <Tab value="PostgreSQL">
+    ```typescript
+    import { inspectDB, PostgresDriver } from 'driftsql'
+
+    const driver = new PostgresDriver({
+      connectionString: 'postgresql://user:password@localhost:5432/mydb'
+    })
+
+    await inspectDB({ driver })
+    ```
+
+    **Features:**
+    - Reads from `information_schema.tables` and `information_schema.columns`
+    - Supports all PostgreSQL data types
+    - Handles nullable columns correctly
+    - Includes column defaults information
+
+  </Tab>
+
+  <Tab value="MySQL">
+    ```typescript
+    import { inspectDB, MySQLDriver } from 'driftsql'
+
+    const driver = new MySQLDriver({
+      connectionString: 'mysql://user:password@localhost:3306/mydb'
+    })
+
+    await inspectDB({ driver })
+    ```
+
+    **Features:**
+    - Reads from `information_schema.tables` and `information_schema.columns`
+    - Supports all MySQL data types
+    - Handles nullable columns correctly
+    - Auto-detects current database
+
+  </Tab>
+
+  <Tab value="LibSQL/SQLite">
+    ```typescript
+    import { inspectDB, LibSQLDriver } from 'driftsql'
+
+    // For Turso/LibSQL
+    const driver = new LibSQLDriver({
+      url: 'libsql://your-database.turso.io',
+      authToken: 'your-auth-token'
+    })
+
+    // For local SQLite
+    const localDriver = new LibSQLDriver({
+      url: 'file:./database.db'
+    })
+
+    await inspectDB({ driver })
+    ```
+
+    **Features:**
+    - Reads from `sqlite_master` and `pragma_table_info`
+    - Supports all SQLite data types
+    - Handles nullable columns correctly
+    - Works with both local and remote databases
+
+  </Tab>
+
+  <Tab value="Neon">
+    ```typescript
+    import { inspectDB, NeonDriver } from 'driftsql'
+
+    const driver = new NeonDriver({
+      connectionString: 'postgresql://user:password@ep-example.us-east-2.aws.neon.tech/mydb'
+    })
+
+    await inspectDB({ driver })
+    ```
+
+    **Features:**
+    - Same as PostgreSQL (uses PostgreSQL schema)
+    - Optimized for serverless environments
+    - Fast cold start inspection
+
+  </Tab>
+</Tabs>
+
+## Generated Types
+
+### Example Database Schema
+
+Consider this database schema:
+
+```sql
+-- Users table
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  age INTEGER,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Posts table
+CREATE TABLE posts (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  content TEXT,
+  user_id INTEGER REFERENCES users(id),
+  published BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Generated TypeScript Interfaces
+
+Running `inspectDB` on the above schema generates:
+
+```typescript
+// db-types.ts
+export interface Users {
+  id: number
+  name: string
+  email: string
+  age: number | null
+  active: boolean | null
+  created_at: Date | null
+}
+
+export interface Posts {
+  id: number
+  title: string
+  content: string | null
+  user_id: number | null
+  published: boolean | null
+  created_at: Date | null
+}
+
+export interface Database {
+  users: Users
+  posts: Posts
+}
+```
+
+## Type Mapping
+
+DriftSQL automatically maps database types to appropriate TypeScript types:
+
+### PostgreSQL Type Mapping
+
+| PostgreSQL Type                      | TypeScript Type |
+| ------------------------------------ | --------------- |
+| `integer`, `int4`, `serial`          | `number`        |
+| `bigint`, `int8`, `bigserial`        | `number`        |
+| `real`, `float4`, `double precision` | `number`        |
+| `numeric`, `decimal`                 | `number`        |
+| `varchar`, `text`, `char`            | `string`        |
+| `boolean`, `bool`                    | `boolean`       |
+| `timestamp`, `timestamptz`, `date`   | `Date`          |
+| `json`, `jsonb`                      | `any`           |
+| `uuid`                               | `string`        |
+| `bytea`                              | `Buffer`        |
+| Arrays                               | `any[]`         |
+
+### MySQL Type Mapping
+
+| MySQL Type                              | TypeScript Type |
+| --------------------------------------- | --------------- |
+| `int`, `integer`, `tinyint`, `smallint` | `number`        |
+| `bigint`, `mediumint`                   | `number`        |
+| `float`, `double`, `decimal`            | `number`        |
+| `varchar`, `text`, `char`               | `string`        |
+| `longtext`, `mediumtext`, `tinytext`    | `string`        |
+| `boolean`, `bool`, `bit`                | `boolean`       |
+| `datetime`, `timestamp`, `date`         | `Date`          |
+| `time`, `year`                          | `Date`          |
+| `json`                                  | `any`           |
+| `binary`, `varbinary`, `blob`           | `Buffer`        |
+
+### SQLite Type Mapping
+
+| SQLite Type        | TypeScript Type |
+| ------------------ | --------------- |
+| `INTEGER`          | `number`        |
+| `REAL`             | `number`        |
+| `TEXT`             | `string`        |
+| `BLOB`             | `Buffer`        |
+| `NUMERIC`          | `number`        |
+| `BOOLEAN`          | `boolean`       |
+| `DATETIME`, `DATE` | `Date`          |
+
+## Using Generated Types
+
+Once you have generated types, use them with your SQLClient:
+
+```typescript
+import type { Database } from './db-types'
+import { PostgresDriver, SQLClient } from 'driftsql'
+
+const driver = new PostgresDriver({
+  connectionString: process.env.DATABASE_URL,
+})
+
+// Pass the Database type to SQLClient
+const client = new SQLClient<Database>({ driver })
+
+// Now you get full type safety!
+const user = await client.findFirst('users', {
+  email: 'john@example.com',
+}) // Returns Users | null
+
+const posts = await client.findMany('posts', {
+  where: { published: true },
+}) // Returns Posts[]
+
+const newUser = await client.insert('users', {
+  name: 'Jane Doe',
+  email: 'jane@example.com',
+  age: 25,
+}) // Returns Users
+
+// TypeScript will catch errors:
+// ❌ This will cause a compile error
+const invalid = await client.findFirst('users', {
+  invalidColumn: 'value',
+})
+
+// ❌ This will also cause a compile error
+const invalidInsert = await client.insert('users', {
+  name: 123, // name should be string
+})
+```
+
+## Advanced Usage
+
+### Custom Output File
+
+```typescript
+await inspectDB({
+  driver,
+  outputFile: 'src/types/database.ts',
+})
+```
+
+### Integration with Build Process
+
+Create a script to regenerate types:
+
+```typescript
+// scripts/generate-types.ts
+import { inspectDB, PostgresDriver } from 'driftsql'
+import consola from 'consola'
+
+async function generateTypes() {
+  const driver = new PostgresDriver({
+    connectionString: process.env.DATABASE_URL,
+  })
+
+  try {
+    await inspectDB({
+      driver,
+      outputFile: 'src/types/db-types.ts',
+    })
+    consola.success('Database types generated successfully!')
+  } catch (error) {
+    consola.error('Failed to generate types:', error)
+    process.exit(1)
+  }
+}
+
+generateTypes()
+```
+
+Add to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "generate-types": "tsx scripts/generate-types.ts",
+    "build": "bun run generate-types && tsc"
+  }
+}
+```
+
+### CI/CD Integration
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run migrations
+        run: bun run migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+
+      - name: Generate types
+        run: bun run generate-types
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+
+      - name: Type check
+        run: bun run type-check
+
+      - name: Run tests
+        run: bun test
+```
+
+## Error Handling
+
+The `inspectDB` function includes robust error handling:
+
+```typescript
+try {
+  await inspectDB({ driver })
+} catch (error) {
+  if (error.message.includes('timeout')) {
+    console.error('Database connection timed out')
+  } else if (error.message.includes('permission')) {
+    console.error('Insufficient database permissions')
+  } else {
+    console.error('Schema inspection failed:', error)
+  }
+}
+```
+
+### Common Issues
+
+<Callout type="warn">**Connection Issues**: Ensure your database is accessible and the connection string is correct.</Callout>
+
+<Callout type="warn">**Permissions**: The database user needs read access to schema information tables.</Callout>
+
+<Callout type="warn">**Large Schemas**: Inspection may take longer for databases with many tables. The function includes retry logic and timeouts.</Callout>
+
+## Best Practices
+
+### 1. Version Control Generated Types
+
+Add generated types to version control to ensure consistency across environments:
+
+```txt
+# Don't ignore generated types
+# db-types.ts
+```
+
+### 2. Regenerate After Schema Changes
+
+Always regenerate types after database schema changes:
+
+```bash
+bun run migrate        # Apply database migrations
+bun run generate-types # Regenerate TypeScript types
+bun run type-check     # Verify everything compiles
+```
+
+### 3. Use in Development Workflow
+
+```typescript
+// src/db.ts
+import type { Database } from './db-types'
+import { PostgresDriver, SQLClient } from 'driftsql'
+
+export const db = new SQLClient<Database>({
+  driver: new PostgresDriver({
+    connectionString: process.env.DATABASE_URL,
+  }),
+})
+
+// Now all database operations are type-safe!
+```
+
+### 4. Multiple Environments
+
+Handle different database schemas for different environments:
+
+```typescript
+// scripts/generate-types.ts
+const environment = process.env.NODE_ENV || 'development'
+const outputFile = `src/types/db-types.${environment}.ts`
+
+await inspectDB({ driver, outputFile })
+```
+
+## Limitations
+
+- **Views**: Currently only inspects tables, not views
+- **Stored Procedures**: Function signatures are not generated
+- **Complex Types**: Some advanced database-specific types may map to `any`
+- **Relationships**: Foreign key relationships are not represented in the type system
+
+## Next Steps
+
+- [API Reference](/docs/api) - Learn how to use the generated types with SQLClient
+- [Examples & Recipes](/docs/examples) - See practical examples using type-safe operations
+- [Database Drivers](/docs/drivers) - Understand driver-specific schema inspection features

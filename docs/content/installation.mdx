@@ -1,0 +1,270 @@
+---
+title: Installation & Setup
+description: Learn how to install and set up DriftSQL in your TypeScript project.
+icon: Download
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs'
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Installation & Setup
+
+Get started with DriftSQL in your TypeScript project.
+
+## Installation
+
+Install DriftSQL using your preferred package manager:
+
+<Tabs items={['bun', 'npm', 'yarn', 'pnpm']}>
+  <Tab value="bun">```bash bun add driftsql ```</Tab>
+
+<Tab value="npm">```bash npm install driftsql ```</Tab>
+
+<Tab value="yarn">```bash yarn add driftsql ```</Tab>
+
+  <Tab value="pnpm">```bash pnpm add driftsql ```</Tab>
+</Tabs>
+
+## Requirements
+
+- **Node.js**: 16.0.0 or higher
+- **TypeScript**: 4.5.0 or higher (for type safety features)
+
+## Database-Specific Dependencies
+
+DriftSQL automatically includes the necessary database drivers, but you may need additional setup for some databases:
+
+### PostgreSQL
+
+No additional dependencies required. Uses the built-in `postgres` driver.
+
+```typescript
+import { PostgresDriver, SQLClient } from 'driftsql'
+
+const driver = new PostgresDriver({
+  connectionString: 'postgresql://user:password@localhost:5432/mydb',
+})
+const client = new SQLClient({ driver })
+```
+
+### MySQL
+
+No additional dependencies required. Uses the built-in `mysql2` driver.
+
+```typescript
+import { MySQLDriver, SQLClient } from 'driftsql'
+
+const driver = new MySQLDriver({
+  connectionString: 'mysql://user:password@localhost:3306/mydb',
+})
+const client = new SQLClient({ driver })
+```
+
+### LibSQL/SQLite/Turso
+
+No additional dependencies required. Uses the built-in `@libsql/client` driver.
+
+```typescript
+import { LibSQLDriver, SQLClient } from 'driftsql'
+
+// For Turso/LibSQL
+const driver = new LibSQLDriver({
+  url: 'libsql://your-database.turso.io',
+  authToken: 'your-auth-token',
+})
+
+// For local SQLite
+const localDriver = new LibSQLDriver({
+  url: 'file:./database.db',
+})
+
+const client = new SQLClient({ driver })
+```
+
+### Neon
+
+No additional dependencies required. Uses the built-in `@neondatabase/serverless` driver.
+
+```typescript
+import { NeonDriver, SQLClient } from 'driftsql'
+
+const driver = new NeonDriver({
+  connectionString: 'postgresql://user:password@ep-example.us-east-2.aws.neon.tech/mydb',
+})
+const client = new SQLClient({ driver })
+```
+
+## Basic Setup
+
+Here's a complete example of setting up DriftSQL in a TypeScript project:
+
+### 1. Create a Database Configuration File
+
+Create a `db.ts` file to centralize your database configuration:
+
+```typescript
+// db.ts
+import { PostgresDriver, SQLClient } from 'driftsql'
+
+const driver = new PostgresDriver({
+  connectionString: process.env.DATABASE_URL || 'postgresql://user:password@localhost:5432/mydb',
+})
+
+export const db = new SQLClient({ driver })
+
+// Optional: Close connection on process exit
+process.on('SIGINT', async () => {
+  await db.close()
+  process.exit(0)
+})
+```
+
+### 2. Environment Variables
+
+Create a `.env` file for your database connection:
+
+```bash
+# .env
+DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+```
+
+<Callout type="warn">Never commit your `.env` file to version control. Add it to your `.gitignore` file.</Callout>
+
+### 3. Use in Your Application
+
+```typescript
+// app.ts
+import { db } from './db'
+
+async function main() {
+  try {
+    // Test the connection
+    const result = await db.query('SELECT NOW() as current_time')
+    console.log('Database connected:', result.rows[0])
+
+    // Your application logic here
+    const users = await db.findMany('users', { limit: 10 })
+    console.log('Users:', users)
+  } catch (error) {
+    console.error('Database error:', error)
+  } finally {
+    await db.close()
+  }
+}
+
+main()
+```
+
+## TypeScript Configuration
+
+For optimal type safety, ensure your `tsconfig.json` includes:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node"
+  }
+}
+```
+
+## Connection Options
+
+Each driver supports various connection options:
+
+### PostgreSQL Connection Options
+
+```typescript
+const driver = new PostgresDriver({
+  connectionString: 'postgresql://user:password@localhost:5432/mydb',
+})
+
+// For experimental HTTP mode:
+const httpDriver = new PostgresDriver({
+  experimental: {
+    http: {
+      url: 'https://your-postgres-http-api.com',
+      apiKey: 'your-api-key',
+    },
+  },
+})
+```
+
+### MySQL Connection Options
+
+```typescript
+const driver = new MySQLDriver({
+  connectionString: 'mysql://user:password@localhost:3306/mydb',
+})
+```
+
+### LibSQL Connection Options
+
+```typescript
+// For remote LibSQL/Turso
+const driver = new LibSQLDriver({
+  url: 'libsql://your-database.turso.io',
+  authToken: 'your-auth-token', // optional for remote
+})
+
+// For local SQLite
+const localDriver = new LibSQLDriver({
+  url: 'file:./database.db',
+})
+
+// Use Turso serverless driver instead of LibSQL
+const tursoDriver = new LibSQLDriver({
+  url: 'libsql://your-database.turso.io',
+  authToken: 'your-auth-token',
+  useTursoServerlessDriver: true, // optional boolean
+})
+```
+
+### Neon Connection Options
+
+```typescript
+const driver = new NeonDriver({
+  connectionString: 'postgresql://user:password@ep-example.us-east-2.aws.neon.tech/mydb',
+})
+```
+
+## Fallback Drivers
+
+You can configure multiple drivers for automatic failover:
+
+```typescript
+import { PostgresDriver, MySQLDriver, SQLClient } from 'driftsql'
+
+const primaryDriver = new PostgresDriver({
+  connectionString: process.env.PRIMARY_DATABASE_URL,
+})
+
+const fallbackDriver = new MySQLDriver({
+  connectionString: process.env.FALLBACK_DATABASE_URL,
+})
+
+const client = new SQLClient({
+  driver: primaryDriver,
+  fallbackDrivers: [fallbackDriver],
+})
+
+// If the primary driver fails, it will automatically try the fallback
+const users = await client.query('SELECT * FROM users')
+```
+
+<Callout type="info">Fallback drivers are useful for high-availability setups, but make sure your SQL queries are compatible across different database types.</Callout>
+
+## Next Steps
+
+Now that you have DriftSQL installed and configured:
+
+- [Database Drivers](/docs/drivers) - Learn more about each driver's specific features
+- [API Reference](/docs/api) - Explore all available methods and options
+- [Schema Inspection](/docs/schema) - Generate TypeScript types from your database
+- [Examples & Recipes](/docs/examples) - See practical examples and common patterns

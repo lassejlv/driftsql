@@ -1,0 +1,504 @@
+---
+title: Database Drivers
+description: Learn about all supported database drivers in DriftSQL including PostgreSQL, MySQL, LibSQL/SQLite, and Neon.
+icon: Database
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs'
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Database Drivers
+
+DriftSQL supports multiple database drivers, each optimized for their respective database systems while maintaining a unified API.
+
+## Supported Drivers
+
+| Driver         | Database            | Transactions | Prepared Statements | Helper Methods |
+| -------------- | ------------------- | ------------ | ------------------- | -------------- |
+| PostgresDriver | PostgreSQL          | ✅           | ❌                  | ✅             |
+| MySQLDriver    | MySQL/MariaDB       | ✅           | ❌                  | ✅             |
+| LibSQLDriver   | LibSQL/SQLite/Turso | ✅           | ❌                  | ✅             |
+| NeonDriver     | Neon PostgreSQL     | ❌           | ❌                  | ✅             |
+
+## PostgreSQL Driver
+
+The PostgreSQL driver supports both traditional connections and experimental HTTP connections.
+
+### Basic Usage
+
+```typescript
+import { PostgresDriver, SQLClient } from 'driftsql'
+
+const driver = new PostgresDriver({
+  connectionString: 'postgresql://user:password@localhost:5432/mydb',
+})
+
+const client = new SQLClient({ driver })
+```
+
+### Configuration Options
+
+```typescript
+interface PostgresConfig {
+  connectionString?: string
+  experimental?: {
+    http?: {
+      url: string
+      apiKey?: string
+    }
+  }
+}
+```
+
+### Features
+
+- **Transactions**: Full transaction support with automatic rollback on errors
+- **Connection Pooling**: Built-in connection pooling via the `postgres` library
+- **Parameter Binding**: Uses PostgreSQL's `$1`, `$2`, etc. parameter syntax
+- **HTTP Mode**: Experimental HTTP-based connections for serverless environments
+
+### Examples
+
+<Tabs items={['Basic Query', 'Transactions', 'HTTP Mode', 'Helper Methods']}>
+  <Tab value="Basic Query">
+    ```typescript
+    // Raw queries with parameters
+    const users = await client.query(
+      'SELECT * FROM users WHERE age > $1 AND city = $2',
+      [18, 'New York']
+    )
+
+    // Insert with returning
+    const newUser = await client.query(
+      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
+      ['John Doe', 'john@example.com']
+    )
+    ```
+
+  </Tab>
+
+  <Tab value="Transactions">
+    ```typescript
+    await client.transaction(async (tx) => {
+      // All operations within this callback are part of the transaction
+      const user = await tx.insert('users', { 
+        name: 'Jane Doe', 
+        email: 'jane@example.com' 
+      })
+      
+      const profile = await tx.insert('profiles', {
+        user_id: user.id,
+        bio: 'Software engineer'
+      })
+      
+      // If any operation fails, the entire transaction is rolled back
+    })
+    ```
+  </Tab>
+
+  <Tab value="HTTP Mode">
+    ```typescript
+    const driver = new PostgresDriver({
+      experimental: {
+        http: {
+          url: 'https://your-postgres-http-api.com',
+          apiKey: 'your-api-key'
+        }
+      }
+    })
+
+    // Note: Transactions are not supported in HTTP mode
+    const users = await client.query('SELECT * FROM users')
+    ```
+
+  </Tab>
+
+  <Tab value="Helper Methods">
+    ```typescript
+    // Find single record
+    const user = await client.findFirst('users', { email: 'john@example.com' })
+
+    // Find multiple records with options
+    const activeUsers = await client.findMany('users', {
+      where: { active: true },
+      limit: 10,
+      offset: 0
+    })
+
+    // Insert record
+    const newUser = await client.insert('users', {
+      name: 'Alice Smith',
+      email: 'alice@example.com'
+    })
+
+    // Update record
+    const updatedUser = await client.update('users',
+      { name: 'Alice Johnson' },
+      { email: 'alice@example.com' }
+    )
+
+    // Delete records
+    const deletedCount = await client.delete('users', { active: false })
+    ```
+
+  </Tab>
+</Tabs>
+
+## MySQL Driver
+
+The MySQL driver provides full support for MySQL and MariaDB databases.
+
+### Basic Usage
+
+```typescript
+import { MySQLDriver, SQLClient } from 'driftsql'
+
+const driver = new MySQLDriver({
+  connectionString: 'mysql://user:password@localhost:3306/mydb',
+})
+
+const client = new SQLClient({ driver })
+```
+
+### Configuration Options
+
+```typescript
+interface MySQLConfig {
+  connectionString: string
+}
+```
+
+### Features
+
+- **Transactions**: Full transaction support with automatic rollback
+- **Connection Management**: Built-in connection handling via `mysql2`
+- **Parameter Binding**: Uses MySQL's `?` parameter syntax
+- **Helper Methods**: Full CRUD operations support
+
+### Examples
+
+<Tabs items={['Basic Query', 'Transactions', 'Helper Methods']}>
+  <Tab value="Basic Query">
+    ```typescript
+    // Raw queries with parameters
+    const users = await client.query(
+      'SELECT * FROM users WHERE age > ? AND city = ?',
+      [18, 'New York']
+    )
+
+    // Insert query
+    const result = await client.query(
+      'INSERT INTO users (name, email) VALUES (?, ?)',
+      ['John Doe', 'john@example.com']
+    )
+    ```
+
+  </Tab>
+
+  <Tab value="Transactions">
+    ```typescript
+    await client.transaction(async (tx) => {
+      const user = await tx.insert('users', { 
+        name: 'Jane Doe', 
+        email: 'jane@example.com' 
+      })
+      
+      const profile = await tx.insert('profiles', {
+        user_id: user.id,
+        bio: 'Software engineer'
+      })
+    })
+    ```
+  </Tab>
+
+  <Tab value="Helper Methods">
+    ```typescript
+    // All helper methods work the same as PostgreSQL
+    const user = await client.findFirst('users', { email: 'john@example.com' })
+    const users = await client.findMany('users', { where: { active: true } })
+    const newUser = await client.insert('users', { name: 'Bob', email: 'bob@example.com' })
+    ```
+  </Tab>
+</Tabs>
+
+## LibSQL Driver
+
+The LibSQL driver supports SQLite, LibSQL, and Turso databases with both local and remote connections.
+
+### Basic Usage
+
+<Tabs items={['Turso/LibSQL', 'Local SQLite', 'Turso Serverless']}>
+  <Tab value="Turso/LibSQL">
+    ```typescript
+    import { LibSQLDriver, SQLClient } from 'driftsql'
+
+    const driver = new LibSQLDriver({
+      url: 'libsql://your-database.turso.io',
+      authToken: 'your-auth-token'
+    })
+
+    const client = new SQLClient({ driver })
+    ```
+
+  </Tab>
+
+  <Tab value="Local SQLite">
+    ```typescript
+    const driver = new LibSQLDriver({
+      url: 'file:./database.db'
+    })
+
+    const client = new SQLClient({ driver })
+    ```
+
+  </Tab>
+
+  <Tab value="Turso Serverless">
+    ```typescript
+    const driver = new LibSQLDriver({
+      url: 'libsql://your-database.turso.io',
+      authToken: 'your-auth-token',
+      useTursoServerlessDriver: true // Use Turso's serverless driver
+    })
+    ```
+  </Tab>
+</Tabs>
+
+### Configuration Options
+
+```typescript
+interface LibSQLConfig {
+  url: string
+  authToken?: string
+  useTursoServerlessDriver?: boolean
+}
+```
+
+### Features
+
+- **Transactions**: Transaction support (limited in some configurations)
+- **Local & Remote**: Works with both local SQLite files and remote LibSQL/Turso
+- **Parameter Binding**: Uses SQLite's `?` parameter syntax
+- **Helper Methods**: Full CRUD operations support
+- **Multiple Backends**: Choose between LibSQL and Turso serverless drivers
+
+### Examples
+
+<Tabs items={['Basic Query', 'Helper Methods', 'Schema Creation']}>
+  <Tab value="Basic Query">
+    ```typescript
+    // Raw queries with parameters
+    const users = await client.query(
+      'SELECT * FROM users WHERE age > ? AND city = ?',
+      [18, 'New York']
+    )
+
+    // SQLite-specific features
+    const result = await client.query('PRAGMA table_info(users)')
+    ```
+
+  </Tab>
+
+  <Tab value="Helper Methods">
+    ```typescript
+    // Helper methods work the same across all drivers
+    const user = await client.findFirst('users', { email: 'john@example.com' })
+    const users = await client.findMany('users', { 
+      where: { active: 1 }, // SQLite uses 1/0 for boolean
+      limit: 10 
+    })
+    ```
+  </Tab>
+
+  <Tab value="Schema Creation">
+    ```typescript
+    // Create tables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
+    // Insert data
+    const user = await client.insert('users', {
+      name: 'John Doe',
+      email: 'john@example.com'
+    })
+    ```
+
+  </Tab>
+</Tabs>
+
+## Neon Driver
+
+The Neon driver is optimized for Neon's serverless PostgreSQL platform.
+
+### Basic Usage
+
+```typescript
+import { NeonDriver, SQLClient } from 'driftsql'
+
+const driver = new NeonDriver({
+  connectionString: 'postgresql://user:password@ep-example.us-east-2.aws.neon.tech/mydb',
+})
+
+const client = new SQLClient({ driver })
+```
+
+### Configuration Options
+
+```typescript
+interface NeonDriverOptions {
+  connectionString: string
+}
+```
+
+### Features
+
+- **Serverless Optimized**: Built specifically for Neon's serverless environment
+- **Helper Methods**: Full CRUD operations support
+- **Parameter Binding**: Uses PostgreSQL's `$1`, `$2`, etc. parameter syntax
+- **Fast Cold Starts**: Optimized for serverless function environments
+
+<Callout type="warn">The Neon driver does not support transactions due to the serverless nature of Neon's platform.</Callout>
+
+### Examples
+
+<Tabs items={['Basic Query', 'Helper Methods', 'Edge Functions']}>
+  <Tab value="Basic Query">
+    ```typescript
+    // Raw queries with parameters
+    const users = await client.query(
+      'SELECT * FROM users WHERE age > $1 AND city = $2',
+      [18, 'New York']
+    )
+
+    // PostgreSQL features work
+    const result = await client.query(
+      'SELECT * FROM users WHERE created_at > NOW() - INTERVAL \'7 days\''
+    )
+    ```
+
+  </Tab>
+
+  <Tab value="Helper Methods">
+    ```typescript
+    // All helper methods work
+    const user = await client.findFirst('users', { email: 'john@example.com' })
+    const users = await client.findMany('users', { 
+      where: { active: true },
+      limit: 10 
+    })
+    
+    const newUser = await client.insert('users', {
+      name: 'Jane Doe',
+      email: 'jane@example.com'
+    })
+    ```
+  </Tab>
+
+  <Tab value="Edge Functions">
+    ```typescript
+    // Perfect for Vercel Edge Functions, Cloudflare Workers, etc.
+    export async function GET() {
+      const driver = new NeonDriver({
+        connectionString: process.env.DATABASE_URL
+      })
+      
+      const client = new SQLClient({ driver })
+      const users = await client.findMany('users', { limit: 10 })
+      
+      return Response.json({ users })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Custom Drivers
+
+You can create your own database drivers by implementing the `DatabaseDriver` interface:
+
+```typescript
+import type { DatabaseDriver, QueryResult } from 'driftsql'
+
+class MyCustomDriver implements DatabaseDriver {
+  async query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    // Your implementation here
+    return {
+      rows: [], // T[]
+      rowCount: 0,
+      command: 'SELECT',
+    }
+  }
+
+  async close(): Promise<void> {
+    // Cleanup logic
+  }
+
+  // Optional: Implement helper methods
+  async findFirst?(table: string, where?: Record<string, any>): Promise<QueryResult<any> | null> {
+    // Implementation
+  }
+
+  async findMany?(
+    table: string,
+    options?: {
+      where?: Record<string, any>
+      limit?: number
+      offset?: number
+    },
+  ): Promise<QueryResult<any>> {
+    // Implementation
+  }
+
+  // ... other optional methods
+}
+
+// Use your custom driver
+const client = new SQLClient({ driver: new MyCustomDriver() })
+```
+
+### Optional Interfaces
+
+For additional functionality, implement these interfaces:
+
+```typescript
+import type { TransactionCapable, PreparedStatementCapable } from 'driftsql'
+
+class MyAdvancedDriver implements DatabaseDriver, TransactionCapable, PreparedStatementCapable {
+  // ... basic DatabaseDriver implementation
+
+  async transaction<T>(callback: (driver: DatabaseDriver) => Promise<T>): Promise<T> {
+    // Transaction implementation
+  }
+
+  async prepare(sql: string): Promise<PreparedStatement> {
+    // Prepared statement implementation
+  }
+}
+```
+
+## Driver Comparison
+
+### When to Use Each Driver
+
+- **PostgresDriver**: Best for traditional PostgreSQL deployments, supports all features
+- **MySQLDriver**: Ideal for MySQL/MariaDB databases, full feature support
+- **LibSQLDriver**: Perfect for SQLite, LibSQL, and Turso. Great for local development and edge deployments
+- **NeonDriver**: Optimized for Neon's serverless PostgreSQL, best for serverless applications
+
+### Performance Characteristics
+
+- **PostgresDriver**: Excellent for high-concurrency applications with connection pooling
+- **MySQLDriver**: Good performance with built-in connection management
+- **LibSQLDriver**: Fast for local operations, variable for remote depending on network
+- **NeonDriver**: Optimized for cold starts and serverless environments
+
+## Next Steps
+
+- [API Reference](/docs/api) - Explore all available methods and options
+- [Schema Inspection](/docs/schema) - Generate TypeScript types from your database
+- [Examples & Recipes](/docs/examples) - See practical examples for each driver

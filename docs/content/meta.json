@@ -1,0 +1,5 @@
+{
+  "title": "DriftSQL Documentation",
+  "description": "A lightweight, type-safe SQL client for TypeScript",
+  "pages": ["index", "installation", "drivers", "api", "schema", "examples"]
+}

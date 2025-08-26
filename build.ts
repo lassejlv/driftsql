@@ -1,8 +1,8 @@
 import { $, build } from 'bun'
 import pkg from './package.json'
-import consola from 'consola'
+import ora from 'ora'
 
-consola.info('Starting build process...')
+const spinner = ora('Building...').start()
 
 await build({
   target: 'node',
@@ -17,4 +17,4 @@ await build({
 
 await $`bun x tsc`
 
-consola.success('Build completed successfully')
+spinner.succeed('Build completed successfully')

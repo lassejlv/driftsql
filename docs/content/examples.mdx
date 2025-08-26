@@ -1,0 +1,755 @@
+---
+title: Examples & Recipes
+description: Practical examples and common patterns for using DriftSQL in real-world applications.
+icon: BookOpen
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs'
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Examples & Recipes
+
+Practical examples and common patterns for using DriftSQL in real-world applications.
+
+## Basic CRUD Operations
+
+### User Management System
+
+Here's a complete example of a user management system with type safety:
+
+```typescript
+// db-types.ts (generated with inspectDB)
+export interface Users {
+  id: number
+  email: string
+  name: string
+  password_hash: string
+  active: boolean
+  created_at: Date
+  updated_at: Date | null
+}
+
+export interface Database {
+  users: Users
+}
+```
+
+```typescript
+// user-service.ts
+import type { Database } from './db-types'
+import { PostgresDriver, SQLClient } from 'driftsql'
+import bcrypt from 'bcrypt'
+
+export class UserService {
+  private db: SQLClient<Database>
+
+  constructor(connectionString: string) {
+    const driver = new PostgresDriver({ connectionString })
+    this.db = new SQLClient<Database>({ driver })
+  }
+
+  async createUser(email: string, name: string, password: string) {
+    const passwordHash = await bcrypt.hash(password, 10)
+
+    return await this.db.insert('users', {
+      email,
+      name,
+      password_hash: passwordHash,
+      active: true,
+      created_at: new Date(),
+    })
+  }
+
+  async getUserByEmail(email: string) {
+    return await this.db.findFirst('users', { email })
+  }
+
+  async updateUser(id: number, updates: Partial<Pick<Users, 'name' | 'active'>>) {
+    return await this.db.update(
+      'users',
+      {
+        ...updates,
+        updated_at: new Date(),
+      },
+      { id },
+    )
+  }
+
+  async deleteUser(id: number) {
+    return await this.db.delete('users', { id })
+  }
+
+  async getActiveUsers(limit = 50) {
+    return await this.db.findMany('users', {
+      where: { active: true },
+      limit,
+    })
+  }
+
+  async close() {
+    await this.db.close()
+  }
+}
+```
+
+### Usage Example
+
+```typescript
+const userService = new UserService(process.env.DATABASE_URL!)
+
+// Create a new user
+const user = await userService.createUser('john@example.com', 'John Doe', 'secretpassword')
+
+// Find user by email
+const foundUser = await userService.getUserByEmail('john@example.com')
+
+// Update user
+const updatedUser = await userService.updateUser(user.id, {
+  name: 'John Smith',
+  active: false,
+})
+
+// Get active users
+const activeUsers = await userService.getActiveUsers(10)
+```
+
+## Advanced Queries
+
+### Complex Filtering and Joins
+
+```typescript
+// For complex queries, use raw SQL with parameters
+export class PostService {
+  constructor(private db: SQLClient<Database>) {}
+
+  async getPostsWithUserInfo(userId?: number, published?: boolean) {
+    let sql = `
+      SELECT 
+        p.*,
+        u.name as author_name,
+        u.email as author_email
+      FROM posts p
+      JOIN users u ON p.user_id = u.id
+      WHERE 1=1
+    `
+    const params: any[] = []
+    let paramIndex = 1
+
+    if (userId !== undefined) {
+      sql += ` AND p.user_id = $${paramIndex}`
+      params.push(userId)
+      paramIndex++
+    }
+
+    if (published !== undefined) {
+      sql += ` AND p.published = $${paramIndex}`
+      params.push(published)
+      paramIndex++
+    }
+
+    sql += ' ORDER BY p.created_at DESC'
+
+    return await this.db.query<{
+      id: number
+      title: string
+      content: string
+      published: boolean
+      created_at: Date
+      author_name: string
+      author_email: string
+    }>(sql, params)
+  }
+
+  async getPostStats() {
+    const result = await this.db.query<{
+      total_posts: number
+      published_posts: number
+      draft_posts: number
+      avg_posts_per_user: number
+    }>(`
+      SELECT 
+        COUNT(*) as total_posts,
+        COUNT(*) FILTER (WHERE published = true) as published_posts,
+        COUNT(*) FILTER (WHERE published = false) as draft_posts,
+        ROUND(COUNT(*)::numeric / COUNT(DISTINCT user_id), 2) as avg_posts_per_user
+      FROM posts
+    `)
+
+    return result.rows[0]
+  }
+}
+```
+
+### Pagination Helper
+
+```typescript
+export interface PaginationOptions {
+  page: number
+  limit: number
+}
+
+export interface PaginatedResult<T> {
+  data: T[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasNext: boolean
+    hasPrev: boolean
+  }
+}
+
+export class PaginationService {
+  constructor(private db: SQLClient<Database>) {}
+
+  async paginateQuery<T>(sql: string, countSql: string, params: any[], options: PaginationOptions): Promise<PaginatedResult<T>> {
+    const { page, limit } = options
+    const offset = (page - 1) * limit
+
+    // Get total count
+    const countResult = await this.db.query<{ count: number }>(countSql, params)
+    const total = parseInt(countResult.rows[0].count.toString())
+
+    // Get paginated data
+    const dataSql = `${sql} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
+    const dataResult = await this.db.query<T>(dataSql, [...params, limit, offset])
+
+    const totalPages = Math.ceil(total / limit)
+
+    return {
+      data: dataResult.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    }
+  }
+
+  async getPaginatedUsers(options: PaginationOptions) {
+    return this.paginateQuery<Users>('SELECT * FROM users WHERE active = $1 ORDER BY created_at DESC', 'SELECT COUNT(*) FROM users WHERE active = $1', [true], options)
+  }
+}
+```
+
+## Transactions
+
+### E-commerce Order Processing
+
+```typescript
+export interface Order {
+  id: number
+  user_id: number
+  total: number
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered'
+  created_at: Date
+}
+
+export interface OrderItem {
+  id: number
+  order_id: number
+  product_id: number
+  quantity: number
+  price: number
+}
+
+export interface Product {
+  id: number
+  name: string
+  price: number
+  stock: number
+}
+
+export class OrderService {
+  constructor(private db: SQLClient<Database>) {}
+
+  async createOrder(userId: number, items: Array<{ product_id: number; quantity: number }>) {
+    return await this.db.transaction(async (tx) => {
+      // Create the order
+      const order = await tx.insert('orders', {
+        user_id: userId,
+        total: 0, // We'll calculate this
+        status: 'pending',
+        created_at: new Date(),
+      })
+
+      let totalAmount = 0
+      const orderItems: OrderItem[] = []
+
+      // Process each item
+      for (const item of items) {
+        // Get product info and check stock
+        const product = await tx.findFirst('products', { id: item.product_id })
+        if (!product) {
+          throw new Error(`Product ${item.product_id} not found`)
+        }
+
+        if (product.stock < item.quantity) {
+          throw new Error(`Insufficient stock for product ${product.name}`)
+        }
+
+        // Update stock
+        await tx.update('products', { stock: product.stock - item.quantity }, { id: product.id })
+
+        // Create order item
+        const orderItem = await tx.insert('order_items', {
+          order_id: order.id,
+          product_id: product.id,
+          quantity: item.quantity,
+          price: product.price,
+        })
+
+        orderItems.push(orderItem)
+        totalAmount += product.price * item.quantity
+      }
+
+      // Update order total
+      const finalOrder = await tx.update('orders', { total: totalAmount }, { id: order.id })
+
+      return {
+        order: finalOrder,
+        items: orderItems,
+        total: totalAmount,
+      }
+    })
+  }
+
+  async cancelOrder(orderId: number) {
+    return await this.db.transaction(async (tx) => {
+      // Get order and items
+      const order = await tx.findFirst('orders', { id: orderId })
+      if (!order || order.status !== 'pending') {
+        throw new Error('Order cannot be cancelled')
+      }
+
+      const items = await tx.findMany('order_items', { where: { order_id: orderId } })
+
+      // Restore stock for each item
+      for (const item of items) {
+        const product = await tx.findFirst('products', { id: item.product_id })
+        if (product) {
+          await tx.update('products', { stock: product.stock + item.quantity }, { id: product.id })
+        }
+      }
+
+      // Update order status
+      return await tx.update('orders', { status: 'cancelled' }, { id: orderId })
+    })
+  }
+}
+```
+
+## Database Migrations
+
+### Migration System
+
+```typescript
+export interface Migration {
+  id: string
+  name: string
+  sql: string
+  rollback?: string
+}
+
+export class MigrationService {
+  constructor(private db: SQLClient) {}
+
+  async initializeMigrationTable() {
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS migrations (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+  }
+
+  async getExecutedMigrations(): Promise<string[]> {
+    const result = await this.db.query<{ id: string }>('SELECT id FROM migrations ORDER BY executed_at')
+    return result.rows.map((row) => row.id)
+  }
+
+  async executeMigration(migration: Migration) {
+    return await this.db.transaction(async (tx) => {
+      // Execute the migration SQL
+      await tx.query(migration.sql)
+
+      // Record the migration
+      await tx.insert('migrations', {
+        id: migration.id,
+        name: migration.name,
+      })
+
+      console.log(`✅ Migration ${migration.id} executed successfully`)
+    })
+  }
+
+  async runMigrations(migrations: Migration[]) {
+    await this.initializeMigrationTable()
+    const executed = await this.getExecutedMigrations()
+
+    for (const migration of migrations) {
+      if (!executed.includes(migration.id)) {
+        await this.executeMigration(migration)
+      } else {
+        console.log(`⏭️  Migration ${migration.id} already executed`)
+      }
+    }
+  }
+}
+
+// Usage
+const migrations: Migration[] = [
+  {
+    id: '001_create_users_table',
+    name: 'Create users table',
+    sql: `
+      CREATE TABLE users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `,
+  },
+  {
+    id: '002_add_user_active_column',
+    name: 'Add active column to users',
+    sql: `
+      ALTER TABLE users 
+      ADD COLUMN active BOOLEAN DEFAULT true
+    `,
+  },
+]
+
+const migrationService = new MigrationService(db)
+await migrationService.runMigrations(migrations)
+```
+
+## Connection Management
+
+### Connection Pool with Health Checks
+
+```typescript
+export class DatabaseManager {
+  private db: SQLClient<Database>
+  private healthCheckInterval?: NodeJS.Timeout
+
+  constructor(connectionString: string) {
+    const driver = new PostgresDriver({ connectionString })
+    this.db = new SQLClient<Database>({ driver })
+  }
+
+  async initialize() {
+    // Test initial connection
+    await this.healthCheck()
+
+    // Start periodic health checks
+    this.healthCheckInterval = setInterval(
+      () => this.healthCheck(),
+      30000, // Every 30 seconds
+    )
+
+    // Graceful shutdown
+    process.on('SIGINT', () => this.shutdown())
+    process.on('SIGTERM', () => this.shutdown())
+  }
+
+  private async healthCheck() {
+    try {
+      await this.db.query('SELECT 1')
+      console.log('✅ Database connection healthy')
+    } catch (error) {
+      console.error('❌ Database health check failed:', error)
+    }
+  }
+
+  async shutdown() {
+    console.log('🔄 Shutting down database connection...')
+
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval)
+    }
+
+    await this.db.close()
+    console.log('✅ Database connection closed')
+    process.exit(0)
+  }
+
+  getClient() {
+    return this.db
+  }
+}
+```
+
+### Multiple Database Support
+
+```typescript
+export class MultiDatabaseService {
+  private primaryDb: SQLClient<Database>
+  private analyticsDb: SQLClient<AnalyticsDatabase>
+  private cacheDb: SQLClient<CacheDatabase>
+
+  constructor() {
+    // Primary PostgreSQL database
+    this.primaryDb = new SQLClient<Database>({
+      driver: new PostgresDriver({
+        connectionString: process.env.PRIMARY_DATABASE_URL!,
+      }),
+    })
+
+    // Analytics database (could be different type)
+    this.analyticsDb = new SQLClient<AnalyticsDatabase>({
+      driver: new LibSQLDriver({
+        url: process.env.ANALYTICS_DATABASE_URL!,
+        authToken: process.env.ANALYTICS_AUTH_TOKEN,
+      }),
+    })
+
+    // Cache database
+    this.cacheDb = new SQLClient<CacheDatabase>({
+      driver: new LibSQLDriver({
+        url: 'file:./cache.db',
+      }),
+    })
+  }
+
+  async createUser(userData: Partial<Users>) {
+    return await this.primaryDb.transaction(async (tx) => {
+      // Create user in primary database
+      const user = await tx.insert('users', userData)
+
+      // Log analytics event
+      await this.analyticsDb.insert('user_events', {
+        user_id: user.id,
+        event_type: 'user_created',
+        timestamp: new Date(),
+      })
+
+      // Cache user data
+      await this.cacheDb.insert('user_cache', {
+        user_id: user.id,
+        data: JSON.stringify(user),
+        expires_at: new Date(Date.now() + 3600000), // 1 hour
+      })
+
+      return user
+    })
+  }
+
+  async close() {
+    await Promise.all([this.primaryDb.close(), this.analyticsDb.close(), this.cacheDb.close()])
+  }
+}
+```
+
+## Testing Patterns
+
+### Database Testing Setup
+
+```typescript
+// test-db-setup.ts
+import { PostgresDriver, SQLClient } from 'driftsql'
+import { randomBytes } from 'crypto'
+
+export class TestDatabaseSetup {
+  private testDbName: string
+  private adminClient: SQLClient
+  private testClient?: SQLClient<Database>
+
+  constructor() {
+    this.testDbName = `test_${randomBytes(8).toString('hex')}`
+
+    // Admin connection for database creation
+    this.adminClient = new SQLClient({
+      driver: new PostgresDriver({
+        connectionString: process.env.TEST_DATABASE_URL!.replace('/test', '/postgres'),
+      }),
+    })
+  }
+
+  async setup() {
+    // Create test database
+    await this.adminClient.query(`CREATE DATABASE ${this.testDbName}`)
+
+    // Connect to test database
+    this.testClient = new SQLClient<Database>({
+      driver: new PostgresDriver({
+        connectionString: process.env.TEST_DATABASE_URL!.replace('/test', `/${this.testDbName}`),
+      }),
+    })
+
+    // Run migrations
+    await this.runTestMigrations()
+
+    return this.testClient
+  }
+
+  async teardown() {
+    if (this.testClient) {
+      await this.testClient.close()
+    }
+
+    // Drop test database
+    await this.adminClient.query(`DROP DATABASE ${this.testDbName}`)
+    await this.adminClient.close()
+  }
+
+  private async runTestMigrations() {
+    if (!this.testClient) throw new Error('Test client not initialized')
+
+    await this.testClient.query(`
+      CREATE TABLE users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+  }
+}
+
+// test example
+describe('UserService', () => {
+  let db: SQLClient<Database>
+  let testDb: TestDatabaseSetup
+  let userService: UserService
+
+  beforeEach(async () => {
+    testDb = new TestDatabaseSetup()
+    db = await testDb.setup()
+    userService = new UserService(db)
+  })
+
+  afterEach(async () => {
+    await testDb.teardown()
+  })
+
+  it('should create a user', async () => {
+    const user = await userService.createUser('test@example.com', 'Test User', 'password123')
+
+    expect(user.email).toBe('test@example.com')
+    expect(user.name).toBe('Test User')
+    expect(user.active).toBe(true)
+  })
+})
+```
+
+## Performance Optimization
+
+### Query Optimization
+
+```typescript
+export class OptimizedQueryService {
+  constructor(private db: SQLClient<Database>) {}
+
+  // Use indexes effectively
+  async findUsersByEmailDomain(domain: string) {
+    // Assuming you have an index on email
+    return await this.db.query<Users>(
+      `
+      SELECT * FROM users 
+      WHERE email LIKE $1
+      ORDER BY created_at DESC
+    `,
+      [`%@${domain}`],
+    )
+  }
+
+  // Batch operations
+  async createMultipleUsers(users: Array<Partial<Users>>) {
+    const values = users
+      .map((user, index) => {
+        const offset = index * 4
+        return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`
+      })
+      .join(', ')
+
+    const params = users.flatMap((user) => [user.email, user.name, user.active ?? true, user.created_at ?? new Date()])
+
+    return await this.db.query<Users>(
+      `
+      INSERT INTO users (email, name, active, created_at)
+      VALUES ${values}
+      RETURNING *
+    `,
+      params,
+    )
+  }
+
+  // Use EXPLAIN to analyze queries
+  async analyzeQuery(sql: string, params: any[] = []) {
+    const result = await this.db.query(`EXPLAIN ANALYZE ${sql}`, params)
+    console.log('Query execution plan:', result.rows)
+    return result
+  }
+}
+```
+
+## Error Handling Patterns
+
+### Robust Error Handling
+
+```typescript
+import { QueryError, ConnectionError, DatabaseError } from 'driftsql'
+
+export class RobustService {
+  constructor(private db: SQLClient<Database>) {}
+
+  async safeQuery<T>(sql: string, params?: any[]): Promise<T[] | null> {
+    try {
+      const result = await this.db.query<T>(sql, params)
+      return result.rows
+    } catch (error) {
+      if (error instanceof QueryError) {
+        console.error('Query failed:', {
+          sql: error.message,
+          driver: error.driverType,
+          originalError: error.originalError?.message,
+        })
+      } else if (error instanceof ConnectionError) {
+        console.error('Connection failed:', error.message)
+        // Maybe try to reconnect
+      } else if (error instanceof DatabaseError) {
+        console.error('Database error:', error.message)
+      }
+
+      return null
+    }
+  }
+
+  async getUserWithRetry(email: string, maxRetries = 3): Promise<Users | null> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.db.findFirst('users', { email })
+      } catch (error) {
+        console.warn(`Attempt ${attempt} failed:`, error)
+
+        if (attempt === maxRetries) {
+          throw error
+        }
+
+        // Wait before retry (exponential backoff)
+        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+      }
+    }
+
+    return null
+  }
+}
+```
+
+<Callout type="info">
+  These examples demonstrate real-world patterns you can adapt for your specific use cases. Remember to always handle errors appropriately and use transactions for operations that need to be atomic.
+</Callout>
+
+## Next Steps
+
+- [API Reference](/docs/api) - Detailed API documentation
+- [Database Drivers](/docs/drivers) - Learn about driver-specific features
+- [Schema Inspection](/docs/schema) - Generate TypeScript types from your database
