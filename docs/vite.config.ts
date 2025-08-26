@@ -1,9 +1,9 @@
-import react from '@vitejs/plugin-react';
-import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import { defineConfig } from 'vite';
-import tsConfigPaths from 'vite-tsconfig-paths';
-import tailwindcss from '@tailwindcss/vite';
-import mdx from 'fumadocs-mdx/vite';
+import react from '@vitejs/plugin-react'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { defineConfig } from 'vite'
+import tsConfigPaths from 'vite-tsconfig-paths'
+import tailwindcss from '@tailwindcss/vite'
+import mdx from 'fumadocs-mdx/vite'
 
 export default defineConfig({
   server: {
@@ -17,10 +17,11 @@ export default defineConfig({
     }),
     tanstackStart({
       customViteReactPlugin: true,
+      target: 'bun',
       prerender: {
         enabled: true,
       },
     }),
     react(),
   ],
-});
+})
