@@ -14,10 +14,10 @@ function Home() {
         <div className="text-center mb-20">
           <div className="mb-8">
             <h1 className="text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent">DriftSQL</h1>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              A lightweight, type-safe SQL client for TypeScript with support for <span className="font-semibold text-blue-600">PostgreSQL</span>,{' '}
-              <span className="font-semibold text-orange-600">MySQL</span>, <span className="font-semibold text-green-600">LibSQL/SQLite</span>, and{' '}
-              <span className="font-semibold text-purple-600">Neon</span>.
+            <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
+              A lightweight, type-safe SQL client for TypeScript with support for <span className="font-semibold text-blue-700">PostgreSQL</span>,{' '}
+              <span className="font-semibold text-orange-700">MySQL</span>, <span className="font-semibold text-green-700">LibSQL/SQLite</span>, and{' '}
+              <span className="font-semibold text-purple-700">Neon</span>.
             </p>
           </div>
 
@@ -96,7 +96,7 @@ const posts = await client.findMany('posts', {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold mb-3 text-blue-900">🔐 Type Safe</h3>
+            <h3 className="text-xl font-bold mb-3 text-slate-800">🔐 Type Safe</h3>
             <p className="text-slate-600 leading-relaxed">Full TypeScript support with generated interfaces from your database schema. Catch errors at compile time, not runtime.</p>
           </div>
 
@@ -106,7 +106,7 @@ const posts = await client.findMany('posts', {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold mb-3 text-purple-900">🔄 Unified API</h3>
+            <h3 className="text-xl font-bold mb-3 text-slate-800">🔄 Unified API</h3>
             <p className="text-slate-600 leading-relaxed">Same interface across PostgreSQL, MySQL, LibSQL/SQLite, and Neon. Switch databases without changing your code.</p>
           </div>
 
@@ -116,7 +116,7 @@ const posts = await client.findMany('posts', {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold mb-3 text-green-900">🚀 Modular</h3>
+            <h3 className="text-xl font-bold mb-3 text-slate-800">🚀 Modular</h3>
             <p className="text-slate-600 leading-relaxed">Import only what you need with built-in SQL injection protection. Lightweight and tree-shakeable.</p>
           </div>
 
@@ -126,7 +126,7 @@ const posts = await client.findMany('posts', {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold mb-3 text-orange-900">🛡️ Secure</h3>
+            <h3 className="text-xl font-bold mb-3 text-slate-800">🛡️ Secure</h3>
             <p className="text-slate-600 leading-relaxed">Parameterized queries by default protect against SQL injection. Built with security best practices.</p>
           </div>
 
@@ -142,7 +142,7 @@ const posts = await client.findMany('posts', {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold mb-3 text-teal-900">⚡ Transactions</h3>
+            <h3 className="text-xl font-bold mb-3 text-slate-800">⚡ Transactions</h3>
             <p className="text-slate-600 leading-relaxed">Full transaction support with automatic rollback on errors. Ensure data consistency across operations.</p>
           </div>
 
@@ -152,7 +152,7 @@ const posts = await client.findMany('posts', {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold mb-3 text-indigo-900">🔍 Schema Inspection</h3>
+            <h3 className="text-xl font-bold mb-3 text-slate-800">🔍 Schema Inspection</h3>
             <p className="text-slate-600 leading-relaxed">Automatically generate TypeScript interfaces from your database schema. Keep types in sync effortlessly.</p>
           </div>
         </div>
@@ -165,7 +165,7 @@ const posts = await client.findMany('posts', {
               <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
                 <div className="w-8 h-8 bg-blue-600 rounded text-white flex items-center justify-center font-bold">P</div>
               </div>
-              <h3 className="font-semibold text-blue-900">PostgreSQL</h3>
+              <h3 className="font-semibold text-slate-800">PostgreSQL</h3>
               <p className="text-sm text-slate-600 mt-2">Full-featured with transactions</p>
             </div>
 
@@ -173,7 +173,7 @@ const posts = await client.findMany('posts', {
               <div className="w-16 h-16 bg-orange-100 rounded-xl flex items-center justify-center mb-4">
                 <div className="w-8 h-8 bg-orange-600 rounded text-white flex items-center justify-center font-bold">M</div>
               </div>
-              <h3 className="font-semibold text-orange-900">MySQL</h3>
+              <h3 className="font-semibold text-slate-800">MySQL</h3>
               <p className="text-sm text-slate-600 mt-2">Reliable with connection pooling</p>
             </div>
 
@@ -181,7 +181,7 @@ const posts = await client.findMany('posts', {
               <div className="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center mb-4">
                 <div className="w-8 h-8 bg-green-600 rounded text-white flex items-center justify-center font-bold">S</div>
               </div>
-              <h3 className="font-semibold text-green-900">LibSQL/SQLite</h3>
+              <h3 className="font-semibold text-slate-800">LibSQL/SQLite</h3>
               <p className="text-sm text-slate-600 mt-2">Local & remote with Turso</p>
             </div>
 
@@ -189,7 +189,7 @@ const posts = await client.findMany('posts', {
               <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
                 <div className="w-8 h-8 bg-purple-600 rounded text-white flex items-center justify-center font-bold">N</div>
               </div>
-              <h3 className="font-semibold text-purple-900">Neon</h3>
+              <h3 className="font-semibold text-slate-800">Neon</h3>
               <p className="text-sm text-slate-600 mt-2">Serverless PostgreSQL</p>
             </div>
           </div>
