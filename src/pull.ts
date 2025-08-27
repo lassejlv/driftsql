@@ -1,5 +1,5 @@
 import consola from 'consola'
-import { PostgresDriver, LibSQLDriver, MySQLDriver, SQLClient, NeonDriver } from '.'
+import { PostgresDriver, LibSQLDriver, MySQLDriver, SQLClient, NeonDriver, SqliteCloudDriver } from '.'
 import type { DatabaseDriver } from './types'
 import fs from 'node:fs/promises'
 
@@ -118,6 +118,7 @@ const getDriverType = (driver: DatabaseDriver): string => {
   if (driver instanceof LibSQLDriver) return 'libsql'
   if (driver instanceof MySQLDriver) return 'mysql'
   if (driver instanceof NeonDriver) return 'neon'
+  if (driver instanceof SqliteCloudDriver) return 'sqlitecloud'
   return 'unknown'
 }
 
@@ -162,7 +163,7 @@ export const inspectDB = async (options: InspectOptions) => {
                    AND table_type = 'BASE TABLE'
                    ORDER BY table_name`
       tableSchemaFilter = 'public'
-    } else if (driverType === 'libsql' || driverType === 'sqlite') {
+    } else if (driverType === 'libsql' || driverType === 'sqlite' || driverType === 'sqlitecloud') {
       // LibSQL/SQLite
       tablesQuery = `SELECT name as table_name
                    FROM sqlite_master
