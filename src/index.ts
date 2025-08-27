@@ -8,6 +8,7 @@ export { PostgresDriver } from './drivers/postgres'
 export { LibSQLDriver } from './drivers/libsql'
 export { MySQLDriver } from './drivers/mysql'
 export { NeonDriver } from './drivers/neon'
+export { SqliteCloudDriver } from './drivers/sqlitecloud'
 export { inspectDB } from './pull'
 
 export interface ClientOptions<T extends DatabaseDriver = DatabaseDriver> {
