@@ -1,4 +1,5 @@
 import consola from 'consola'
+import chalk from 'chalk'
 import { PostgresDriver, LibSQLDriver, MySQLDriver, SQLClient, NeonDriver, SqliteCloudDriver } from '.'
 import type { DatabaseDriver } from './types'
 import fs from 'node:fs/promises'
@@ -188,12 +189,7 @@ export const inspectDB = async (options: InspectOptions) => {
     for (const table of tables.rows) {
       const tableName = table.table_name
       // Skip tables that start with 'sqlite_sequence'
-      if (tableName.startsWith('sqlite_sequence')) {
-        continue
-      }
-
-      // Skip prisma generated tables
-      if (tableName.startsWith('_prisma_migrations')) {
+      if (tableName.startsWith('sqlite_sequence') || tableName.startsWith('_prisma_migrations')) {
         continue
       }
 
@@ -262,7 +258,11 @@ export const inspectDB = async (options: InspectOptions) => {
           continue
         }
 
-        consola.info(`Columns in ${tableName}:`, columns.rows.map((c) => `${c.column_name} (${c.data_type}${c.is_nullable === 'YES' ? ', nullable' : ''})`).join(', '))
+        consola.info(`Columns in '${tableName}'`)
+        columns.rows.forEach((c) => {
+          const typeDisplay = c.data_type + (c.is_nullable === 'YES' ? ' (nullable)' : '')
+          consola.info(`  > ${chalk.bold.yellow(typeDisplay)} > ${c.column_name}`)
+        })
 
         // Deduplicate columns by name
         const uniqueColumns = new Map<string, (typeof columns.rows)[0]>()
@@ -288,6 +288,10 @@ export const inspectDB = async (options: InspectOptions) => {
     // Generate the Database interface
     generatedTypes += 'export interface Database {\n'
     for (const table of tables.rows) {
+      if (table.table_name.startsWith('sqlite_sequence') || table.table_name.startsWith('_prisma_migrations')) {
+        continue
+      }
+
       const interfaceName = table.table_name.charAt(0).toUpperCase() + table.table_name.slice(1)
       generatedTypes += `  ${table.table_name}: ${interfaceName};\n`
     }
