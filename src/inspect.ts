@@ -119,14 +119,15 @@ const getDriverType = (driver: DatabaseDriver): string => {
   if (driver instanceof MySQLDriver) return 'mysql'
   if (driver instanceof NeonDriver) return 'neon'
   if (driver instanceof SqliteCloudDriver) return 'sqlitecloud'
-  return 'unknown'
+  return `${driver.constructor.name || 'unknown driver'}`
 }
 
 export const inspectDB = async (options: InspectOptions) => {
+  consola.warn('inspectDB is experimental and may make mistakes when inspecting your database. However it will not destroy your database.')
   const { driver, outputFile = 'db-types.ts' } = options
   const driverType = getDriverType(driver)
 
-  consola.log(`Inspecting database using ${driverType} driver`)
+  consola.start(`Inspecting database using ${driverType} driver`)
 
   const client = new SQLClient({ driver })
   let generatedTypes = ''
@@ -148,7 +149,7 @@ export const inspectDB = async (options: InspectOptions) => {
         throw new Error('Could not determine current MySQL database name')
       }
 
-      consola.log(`Using MySQL database: ${currentDatabase}`)
+      consola.success(`Using MySQL database: ${currentDatabase}`)
       tablesQuery = `SELECT TABLE_NAME as table_name
                    FROM information_schema.tables
                    WHERE TABLE_SCHEMA = ?
@@ -179,15 +180,25 @@ export const inspectDB = async (options: InspectOptions) => {
       30_000,
     )
 
-    consola.log('Tables in the database:', tables.rows.map((t) => t.table_name).join(', '))
+    consola.info('Tables in the database:', tables.rows.map((t) => t.table_name).join(', '))
 
     let processedTables = 0
     const totalTables = tables.rows.length
 
     for (const table of tables.rows) {
       const tableName = table.table_name
+      // Skip tables that start with 'sqlite_sequence'
+      if (tableName.startsWith('sqlite_sequence')) {
+        continue
+      }
+
+      // Skip prisma generated tables
+      if (tableName.startsWith('_prisma_migrations')) {
+        continue
+      }
+
       processedTables++
-      consola.log(`[${processedTables}/${totalTables}] Inspecting table: ${tableName}`)
+      consola.info(`[${processedTables}/${totalTables}] Inspecting table: ${tableName}`)
 
       try {
         // Get columns with nullability information
@@ -247,11 +258,11 @@ export const inspectDB = async (options: InspectOptions) => {
         )
 
         if (columns.rows.length === 0) {
-          consola.log(`No columns found for table: ${tableName}`)
+          consola.info(`No columns found for table: ${tableName}`)
           continue
         }
 
-        consola.log(`Columns in ${tableName}:`, columns.rows.map((c) => `${c.column_name} (${c.data_type}${c.is_nullable === 'YES' ? ', nullable' : ''})`).join(', '))
+        consola.info(`Columns in ${tableName}:`, columns.rows.map((c) => `${c.column_name} (${c.data_type}${c.is_nullable === 'YES' ? ', nullable' : ''})`).join(', '))
 
         // Deduplicate columns by name
         const uniqueColumns = new Map<string, (typeof columns.rows)[0]>()
@@ -269,7 +280,7 @@ export const inspectDB = async (options: InspectOptions) => {
         generatedTypes += '}\n\n'
       } catch (error) {
         consola.error(`Failed to process table ${tableName}:`, error)
-        consola.log(`Skipping table ${tableName} and continuing...`)
+        consola.info(`Skipping table ${tableName} and continuing...`)
         continue
       }
     }
@@ -283,13 +294,13 @@ export const inspectDB = async (options: InspectOptions) => {
     generatedTypes += '}\n\n'
 
     await fs.writeFile(outputFile, generatedTypes, 'utf8')
-    consola.log(`TypeScript types written to ${outputFile}`)
-    consola.log(`Successfully processed ${processedTables} tables`)
+    consola.success(`TypeScript types written to ${outputFile}`)
+    consola.success(`Successfully processed ${processedTables} tables`)
   } catch (error) {
     consola.error('Fatal error during database inspection:', error)
     throw error
   } finally {
-    await client.close()
+    await client.close().catch((error) => consola.error('Error closing client:', error))
   }
 }
 

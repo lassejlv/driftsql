@@ -9,7 +9,8 @@ export { LibSQLDriver } from './drivers/libsql'
 export { MySQLDriver } from './drivers/mysql'
 export { NeonDriver } from './drivers/neon'
 export { SqliteCloudDriver } from './drivers/sqlitecloud'
-export { inspectDB } from './pull'
+export { inspectDB } from './inspect'
+export { SurrealDriver } from './drivers/surreal'
 
 export interface ClientOptions<T extends DatabaseDriver = DatabaseDriver> {
   driver: T
