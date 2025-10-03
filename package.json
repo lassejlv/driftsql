@@ -1,6 +1,6 @@
 {
   "name": "driftsql",
-  "version": "1.0.30",
+  "version": "1.0.31",
   "main": "dist/index.js",
   "description": "A lightweight SQL client for TypeScript",
   "scripts": {
