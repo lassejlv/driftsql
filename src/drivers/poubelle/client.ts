@@ -4,6 +4,42 @@ export interface Row {
   [key: string]: number | string | null
 }
 
+// A function to parse rows for the query function
+function parseRows(result: string): Row[] {
+  const rows: Row[] = []
+  const lines = result.split('\n').filter((l) => l.trim())
+
+  for (const line of lines) {
+    const cleaned = line.replace(/^{|}$/g, '')
+    const pairs = cleaned.split(', ')
+    const row: Row = {}
+
+    for (const pair of pairs) {
+      const [key, value] = pair.split(': ')
+      if (key && value) {
+        const cleanKey = key.replace(/"/g, '')
+        const cleanValue = value.replace(/"/g, '')
+
+        if (cleanValue === 'Null') {
+          row[cleanKey] = null
+        } else if (cleanValue.startsWith('Int(')) {
+          row[cleanKey] = parseInt(cleanValue.slice(4, -1))
+        } else if (cleanValue.startsWith('Text(')) {
+          row[cleanKey] = cleanValue.slice(5, -1)
+        } else {
+          row[cleanKey] = cleanValue
+        }
+      }
+    }
+
+    if (Object.keys(row).length > 0) {
+      rows.push(row)
+    }
+  }
+
+  return rows
+}
+
 interface ParsedConnection {
   host: string
   port: number
@@ -64,7 +100,7 @@ export class PoubelleClient {
     this.connected = true
   }
 
-  async query(sql: string): Promise<string> {
+  async query(sql: string): Promise<Row[]> {
     if (!this.connected || !this.socket) {
       throw new Error('Not connected')
     }
@@ -75,17 +111,17 @@ export class PoubelleClient {
 
     await new Promise((resolve) => setTimeout(resolve, 100))
     const result = this.buffer.split('poubelle> ')[0].trim()
-    return result
+    return parseRows(result)
   }
 
-  async createTable(name: string, columns: Record<string, 'INT' | 'TEXT'>): Promise<string> {
+  async createTable(name: string, columns: Record<string, 'INT' | 'TEXT'>): Promise<void> {
     const cols = Object.entries(columns)
       .map(([name, type]) => `${name} ${type}`)
       .join(', ')
-    return this.query(`CREATE TABLE ${name} (${cols})`)
+    await this.query(`CREATE TABLE ${name} (${cols})`)
   }
 
-  async insert(table: string, data: Record<string, number | string | null>): Promise<string> {
+  async insert(table: string, data: Record<string, number | string | null>): Promise<void> {
     const columns = Object.keys(data).join(', ')
     const values = Object.values(data)
       .map((v) => {
@@ -94,53 +130,12 @@ export class PoubelleClient {
         return v
       })
       .join(', ')
-    return this.query(`INSERT INTO ${table} (${columns}) VALUES (${values})`)
+    await this.query(`INSERT INTO ${table} (${columns}) VALUES (${values})`)
   }
 
   async select(table: string, columns: string[] = ['*']): Promise<Row[]> {
     const cols = columns.join(', ')
-    const result = await this.query(`SELECT ${cols} FROM ${table}`)
-
-    if (result === 'No rows') {
-      return []
-    }
-
-    const rows: Row[] = []
-    const lines = result.split('\n').filter((l) => l.trim())
-
-    for (const line of lines) {
-      try {
-        const cleaned = line.replace(/^{|}$/g, '')
-        const pairs = cleaned.split(', ')
-        const row: Row = {}
-
-        for (const pair of pairs) {
-          const [key, value] = pair.split(': ')
-          if (key && value) {
-            const cleanKey = key.replace(/"/g, '')
-            const cleanValue = value.replace(/"/g, '')
-
-            if (cleanValue === 'Null') {
-              row[cleanKey] = null
-            } else if (cleanValue.startsWith('Int(')) {
-              row[cleanKey] = parseInt(cleanValue.slice(4, -1))
-            } else if (cleanValue.startsWith('Text(')) {
-              row[cleanKey] = cleanValue.slice(5, -1)
-            } else {
-              row[cleanKey] = cleanValue
-            }
-          }
-        }
-
-        if (Object.keys(row).length > 0) {
-          rows.push(row)
-        }
-      } catch (e) {
-        console.error('Failed to parse row:', line)
-      }
-    }
-
-    return rows
+    return await this.query(`SELECT ${cols} FROM ${table}`)
   }
 
   async close(): Promise<void> {
